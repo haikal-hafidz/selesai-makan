@@ -11,13 +11,31 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowLeft,
+  Download,
+  Award,
+  TrendingUp,
+  Paperclip,
 } from 'lucide-react';
-import { LearningClass, Chapter, Lesson, Quiz, QuizAttempt, ResourceItem } from '../types';
+import {
+  LearningClass,
+  Chapter,
+  Lesson,
+  Quiz,
+  QuizAttempt,
+  ResourceItem,
+  Assignment,
+  AssignmentSubmission,
+} from '../types';
 import { MarkdownViewer } from './MarkdownViewer';
 import { LessonEditor } from './LessonEditor';
 import { ResourceLibrary } from './ResourceLibrary';
 import { QuizTaker } from './QuizTaker';
 import { QuizEditorModal } from './QuizEditorModal';
+import { ResourcePreviewModal } from './ResourcePreviewModal';
+import { PracticeCenter } from './PracticeCenter';
+import { AssignmentWorkspace } from './AssignmentWorkspace';
+import { ProgressDashboard } from './ProgressDashboard';
+import { exportLearningPack } from '../services/learningPack';
 
 interface ClassroomProps {
   learningClass: LearningClass;
@@ -26,19 +44,21 @@ interface ClassroomProps {
   quizzes: Quiz[];
   attempts: QuizAttempt[];
   resources: ResourceItem[];
+  submissions: AssignmentSubmission[];
   selectedLessonId?: string;
   onSelectLesson: (id: string) => void;
   onBackToClasses: () => void;
   onAddChapter: (title: string) => Promise<void>;
   onDeleteChapter: (id: string) => Promise<void>;
-  onAddLesson: (chapterId: string, title: string) => Promise<void>;
+  onAddLesson: (chapterId: string, title: string, content?: string) => Promise<void>;
   onSaveLesson: (lesson: Lesson) => Promise<void>;
   onDeleteLesson: (id: string) => Promise<void>;
   onToggleLessonComplete: (lessonId: string) => Promise<void>;
   onSaveQuiz: (quiz: Quiz) => Promise<void>;
   onDeleteQuiz: (id: string) => Promise<void>;
   onRecordAttempt: (attempt: QuizAttempt) => Promise<void>;
-  onUploadResource: (file: File) => Promise<void>;
+  onSaveSubmission: (submission: AssignmentSubmission) => Promise<void>;
+  onUploadResource: (file: File, chapterId?: string, lessonId?: string) => Promise<void>;
   onDeleteResource: (id: string) => Promise<void>;
 }
 
@@ -49,6 +69,7 @@ export const Classroom: React.FC<ClassroomProps> = ({
   quizzes,
   attempts,
   resources,
+  submissions,
   selectedLessonId,
   onSelectLesson,
   onBackToClasses,
@@ -59,12 +80,14 @@ export const Classroom: React.FC<ClassroomProps> = ({
   onDeleteLesson,
   onToggleLessonComplete,
   onSaveQuiz,
-  onDeleteQuiz,
   onRecordAttempt,
+  onSaveSubmission,
   onUploadResource,
   onDeleteResource,
 }) => {
-  const [activeTab, setActiveTab] = useState<'lessons' | 'resources' | 'quizzes'>('lessons');
+  // Navigation tabs: Learn | Practice | Resources | Progress
+  const [activeTab, setActiveTab] = useState<'learn' | 'practice' | 'resources' | 'progress'>('learn');
+
   const [isEditingLesson, setIsEditingLesson] = useState(false);
   const [collapsedChapters, setCollapsedChapters] = useState<Record<string, boolean>>({});
   const [isCreatingChapter, setIsCreatingChapter] = useState(false);
@@ -72,16 +95,42 @@ export const Classroom: React.FC<ClassroomProps> = ({
   const [addingLessonForChapter, setAddingLessonForChapter] = useState<string | null>(null);
   const [newLessonTitle, setNewLessonTitle] = useState('');
 
-  // Quiz Modal & Active Quiz taker
+  // Modals & Active Viewers
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
-  const [editingQuiz, setEditingQuiz] = useState<Quiz | undefined>(undefined);
+  const [editingQuiz] = useState<Quiz | undefined>(undefined);
   const [activeTakingQuiz, setActiveTakingQuiz] = useState<Quiz | null>(null);
+  const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
+  const [previewingResource, setPreviewingResource] = useState<ResourceItem | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   const activeLesson = lessons.find((l) => l.id === selectedLessonId) || lessons[0];
 
   const totalLessons = lessons.length;
   const completedLessons = lessons.filter((l) => l.isCompleted).length;
   const progressPercent = totalLessons === 0 ? 0 : Math.round((completedLessons / totalLessons) * 100);
+
+  // Collect all assignments across lessons
+  const allAssignments: Assignment[] = [];
+  lessons.forEach((l) => {
+    if (l.assignments && Array.isArray(l.assignments)) {
+      l.assignments.forEach((a) => {
+        allAssignments.push({
+          ...a,
+          lessonId: l.id,
+          classId: learningClass.id,
+        });
+      });
+    }
+  });
+
+  // Current lesson assignments & resources
+  const lessonResources = activeLesson
+    ? resources.filter((r) => r.lessonId === activeLesson.id)
+    : [];
+  const lessonQuiz = activeLesson
+    ? quizzes.find((q) => q.lessonId === activeLesson.id)
+    : undefined;
+  const lessonAssignments = activeLesson?.assignments || [];
 
   const toggleChapterCollapse = (chId: string) => {
     setCollapsedChapters((prev) => ({ ...prev, [chId]: !prev[chId] }));
@@ -114,6 +163,36 @@ export const Classroom: React.FC<ClassroomProps> = ({
     setIsEditingLesson(false);
   };
 
+  const handleExportClassLearningPack = async () => {
+    try {
+      const json = await exportLearningPack(learningClass.id);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = learningClass.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      a.download = `${safeTitle}-learning-pack.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportNotice('Learning Pack exported successfully!');
+      setTimeout(() => setExportNotice(null), 3500);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Export failed.');
+    }
+  };
+
+  const handleCreateLessonFromExtractedContent = async (title: string, text: string) => {
+    let targetChapterId = chapters.length > 0 ? chapters[0].id : '';
+    if (!targetChapterId) {
+      await onAddChapter('Course Materials');
+      return;
+    }
+    await onAddLesson(targetChapterId, title, text);
+    setActiveTab('learn');
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Top Breadcrumb & Class Header */}
@@ -139,28 +218,46 @@ export const Classroom: React.FC<ClassroomProps> = ({
           </div>
         </div>
 
-        {/* View Switcher Tabs */}
+        {/* 4 Distinct Classroom Areas: Learn | Practice | Resources | Progress */}
         <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
           <button
             type="button"
             onClick={() => {
-              setActiveTab('lessons');
+              setActiveTab('learn');
               setActiveTakingQuiz(null);
+              setActiveAssignment(null);
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'lessons'
+              activeTab === 'learn'
                 ? 'bg-white text-stone-900 shadow-xs'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
             <BookOpen size={14} />
-            <span>Curriculum & Notes</span>
+            <span>Learn</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('practice');
+              setActiveTakingQuiz(null);
+              setActiveAssignment(null);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+              activeTab === 'practice'
+                ? 'bg-white text-stone-900 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Award size={14} />
+            <span>Practice ({quizzes.length + allAssignments.length})</span>
           </button>
           <button
             type="button"
             onClick={() => {
               setActiveTab('resources');
               setActiveTakingQuiz(null);
+              setActiveAssignment(null);
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
               activeTab === 'resources'
@@ -169,34 +266,45 @@ export const Classroom: React.FC<ClassroomProps> = ({
             }`}
           >
             <FileText size={14} />
-            <span>Library ({resources.length})</span>
+            <span>Resources ({resources.length})</span>
           </button>
           <button
             type="button"
             onClick={() => {
-              setActiveTab('quizzes');
+              setActiveTab('progress');
               setActiveTakingQuiz(null);
+              setActiveAssignment(null);
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'quizzes'
+              activeTab === 'progress'
                 ? 'bg-white text-stone-900 shadow-xs'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            <FileQuestion size={14} />
-            <span>Quizzes ({quizzes.length})</span>
+            <TrendingUp size={14} />
+            <span>Progress</span>
           </button>
         </div>
 
-        {/* Progress summary indicator */}
+        {/* Header Right: Export Pack & Progress */}
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExportClassLearningPack}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-medium transition cursor-pointer"
+            title="Export as versioned JSON Learning Pack"
+          >
+            <Download size={13} />
+            <span>Export Pack</span>
+          </button>
+
           <div className="text-right hidden sm:block">
             <span className="text-xs font-medium text-stone-500">Progress</span>
             <span className="text-xs font-bold text-stone-800 ml-1.5">
               {completedLessons}/{totalLessons} ({progressPercent}%)
             </span>
           </div>
-          <div className="w-24 h-2 bg-stone-200 rounded-full overflow-hidden">
+          <div className="w-20 h-2 bg-stone-200 rounded-full overflow-hidden">
             <div
               className="h-full bg-amber-600 transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
@@ -205,10 +313,17 @@ export const Classroom: React.FC<ClassroomProps> = ({
         </div>
       </div>
 
+      {exportNotice && (
+        <div className="bg-emerald-50 text-emerald-800 text-xs px-6 py-2 border-b border-emerald-200 flex items-center gap-2">
+          <CheckCircle size={14} />
+          <span>{exportNotice}</span>
+        </div>
+      )}
+
       {/* Main Classroom Body */}
       <div className="flex-1 flex overflow-hidden">
-        {/* TAB 1: Lessons & Syllabus */}
-        {activeTab === 'lessons' && (
+        {/* AREA 1: LEARN (Syllabus & Material Reading) */}
+        {activeTab === 'learn' && (
           <>
             {/* Sidebar: Syllabus Outline */}
             <aside className="w-80 border-r border-stone-200 bg-stone-50/70 flex flex-col justify-between overflow-y-auto">
@@ -436,6 +551,55 @@ export const Classroom: React.FC<ClassroomProps> = ({
                       </div>
                     </div>
 
+                    {/* Lesson Associated Actions (Quizzes, Assignments, Resources) */}
+                    {(lessonResources.length > 0 || lessonQuiz || lessonAssignments.length > 0) && (
+                      <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200/70 space-y-2.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 block">
+                          Associated Materials & Practice Tasks
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {lessonAssignments.map((assign, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setActiveAssignment(assign);
+                                setActiveTab('practice');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-700 text-white text-xs font-medium hover:bg-emerald-800 shadow-2xs transition cursor-pointer"
+                            >
+                              <Award size={13} />
+                              <span>Open Assignment: {assign.title}</span>
+                            </button>
+                          ))}
+                          {lessonQuiz && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTakingQuiz(lessonQuiz);
+                                setActiveTab('practice');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition cursor-pointer"
+                            >
+                              <FileQuestion size={13} />
+                              <span>Take Lesson Quiz ({lessonQuiz.questions.length} Qs)</span>
+                            </button>
+                          )}
+                          {lessonResources.map((res) => (
+                            <button
+                              key={res.id}
+                              type="button"
+                              onClick={() => setPreviewingResource(res)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-xs font-medium text-stone-800 hover:bg-stone-50 shadow-2xs transition cursor-pointer"
+                            >
+                              <Paperclip size={12} className="text-amber-700" />
+                              <span className="truncate max-w-[200px]">{res.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="bg-stone-50/40 p-8 rounded-2xl border border-stone-100 min-h-[400px]">
                       <MarkdownViewer content={activeLesson.content} />
                     </div>
@@ -454,151 +618,83 @@ export const Classroom: React.FC<ClassroomProps> = ({
           </>
         )}
 
-        {/* TAB 2: Resource Library */}
+        {/* AREA 2: PRACTICE (Quizzes, Assignments, Evaluations) */}
+        {activeTab === 'practice' && (
+          <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-stone-50/50">
+            {activeAssignment ? (
+              <AssignmentWorkspace
+                assignment={activeAssignment}
+                classId={learningClass.id}
+                lessonId={activeAssignment.lessonId}
+                associatedResources={resources}
+                existingSubmission={submissions.find((s) => s.assignmentId === activeAssignment.id)}
+                onSaveSubmission={onSaveSubmission}
+                onBack={() => setActiveAssignment(null)}
+              />
+            ) : activeTakingQuiz ? (
+              <QuizTaker
+                quiz={activeTakingQuiz}
+                onComplete={onRecordAttempt}
+                onExit={() => setActiveTakingQuiz(null)}
+              />
+            ) : (
+              <div className="max-w-5xl mx-auto">
+                <PracticeCenter
+                  chapters={chapters}
+                  lessons={lessons}
+                  quizzes={quizzes}
+                  attempts={attempts}
+                  assignments={allAssignments}
+                  submissions={submissions}
+                  onTakeQuiz={(q) => setActiveTakingQuiz(q)}
+                  onOpenAssignment={(a) => setActiveAssignment(a)}
+                  onNavigateToLesson={(lessonId) => {
+                    onSelectLesson(lessonId);
+                    setActiveTab('learn');
+                  }}
+                />
+              </div>
+            )}
+          </main>
+        )}
+
+        {/* AREA 3: RESOURCES */}
         {activeTab === 'resources' && (
           <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-stone-50/50">
             <div className="max-w-5xl mx-auto">
               <ResourceLibrary
                 classId={learningClass.id}
+                chapters={chapters}
+                lessons={lessons}
                 resources={resources}
                 onUploadResource={onUploadResource}
                 onDeleteResource={onDeleteResource}
+                onCreateLessonFromText={handleCreateLessonFromExtractedContent}
               />
             </div>
           </main>
         )}
 
-        {/* TAB 3: Quizzes & Exercises */}
-        {activeTab === 'quizzes' && (
+        {/* AREA 4: PROGRESS & EVALUATIONS */}
+        {activeTab === 'progress' && (
           <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-stone-50/50">
-            <div className="max-w-4xl mx-auto">
-              {activeTakingQuiz ? (
-                <QuizTaker
-                  quiz={activeTakingQuiz}
-                  onComplete={onRecordAttempt}
-                  onExit={() => setActiveTakingQuiz(null)}
-                />
-              ) : (
-                <div className="space-y-6">
-                  {/* Quizzes Header */}
-                  <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-stone-900">Quizzes & Self-Assessment</h2>
-                      <p className="text-sm text-stone-500 mt-1">
-                        Solidify your learning with multiple-choice exercises and answer rationale.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingQuiz(undefined);
-                        setIsQuizModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 text-white font-medium text-sm hover:bg-amber-700 transition cursor-pointer shadow-xs"
-                    >
-                      <Plus size={16} />
-                      <span>New Quiz</span>
-                    </button>
-                  </div>
-
-                  {quizzes.length === 0 ? (
-                    <div className="bg-white rounded-2xl border border-dashed border-stone-300 p-12 text-center">
-                      <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4">
-                        <FileQuestion size={30} />
-                      </div>
-                      <h3 className="text-lg font-semibold text-stone-800">No quizzes created yet</h3>
-                      <p className="text-sm text-stone-500 max-w-sm mx-auto mt-1 mb-6">
-                        Reinforce your knowledge by crafting key test questions for this course.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingQuiz(undefined);
-                          setIsQuizModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-stone-300 text-sm font-medium text-stone-700 hover:bg-stone-50 transition cursor-pointer"
-                      >
-                        <Plus size={15} />
-                        <span>Create First Quiz</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {quizzes.map((quiz) => {
-                        const quizAttempts = attempts.filter((a) => a.quizId === quiz.id);
-                        const bestAttempt = quizAttempts.sort((a, b) => b.score - a.score)[0];
-
-                        return (
-                          <div
-                            key={quiz.id}
-                            className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between hover:border-amber-300 transition"
-                          >
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-600">
-                                  {quiz.questions.length} Questions
-                                </span>
-                                {bestAttempt && (
-                                  <span
-                                    className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                      bestAttempt.passed
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : 'bg-amber-100 text-amber-800'
-                                    }`}
-                                  >
-                                    Best: {bestAttempt.score}/{bestAttempt.totalQuestions}
-                                  </span>
-                                )}
-                              </div>
-                              <h4 className="font-semibold text-stone-900 text-base mb-1">{quiz.title}</h4>
-                              {quiz.description && (
-                                <p className="text-xs text-stone-500 line-clamp-2 mb-3">
-                                  {quiz.description}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex items-center justify-between pt-4 mt-2 border-t border-stone-100">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveTakingQuiz(quiz)}
-                                  className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-medium text-xs hover:bg-amber-700 transition cursor-pointer"
-                                >
-                                  Take Quiz
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingQuiz(quiz);
-                                    setIsQuizModalOpen(true);
-                                  }}
-                                  className="p-1.5 text-stone-500 hover:text-stone-800 rounded-md hover:bg-stone-100 transition cursor-pointer"
-                                  title="Edit Quiz Questions"
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (confirm(`Delete quiz "${quiz.title}"?`)) {
-                                    onDeleteQuiz(quiz.id);
-                                  }
-                                }}
-                                className="p-1.5 text-stone-400 hover:text-red-600 rounded-md hover:bg-red-50 transition cursor-pointer"
-                                title="Delete Quiz"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="max-w-5xl mx-auto">
+              <ProgressDashboard
+                chapters={chapters}
+                lessons={lessons}
+                quizzes={quizzes}
+                attempts={attempts}
+                assignments={allAssignments}
+                submissions={submissions}
+                onNavigateToLesson={(lId) => {
+                  onSelectLesson(lId);
+                  setActiveTab('learn');
+                }}
+                onOpenAssignment={(a) => {
+                  setActiveAssignment(a);
+                  setActiveTab('practice');
+                }}
+              />
             </div>
           </main>
         )}
@@ -614,6 +710,15 @@ export const Classroom: React.FC<ClassroomProps> = ({
             setIsQuizModalOpen(false);
           }}
           onClose={() => setIsQuizModalOpen(false)}
+        />
+      )}
+
+      {/* In-Lesson Resource Preview Modal */}
+      {previewingResource && (
+        <ResourcePreviewModal
+          resource={previewingResource}
+          onClose={() => setPreviewingResource(null)}
+          onCreateLessonFromText={handleCreateLessonFromExtractedContent}
         />
       )}
     </div>

@@ -8,13 +8,24 @@ import {
   Trash2,
   Edit,
   ArrowRight,
+  FileCode,
 } from 'lucide-react';
-import { LearningClass, Chapter, Lesson, Quiz, QuizAttempt, ResourceItem } from './types';
+import {
+  LearningClass,
+  Chapter,
+  Lesson,
+  Quiz,
+  QuizAttempt,
+  ResourceItem,
+  AssignmentSubmission,
+} from './types';
 import { storage } from './services/storage';
 import { preferencesService, UserPreferences } from './services/preferences';
+import { extractResourceContent } from './services/resourceExtractor';
 import { ClassModal } from './components/ClassModal';
 import { Classroom } from './components/Classroom';
 import { BackupSettings } from './components/BackupSettings';
+import { LearningPackImportModal } from './components/LearningPackImportModal';
 
 export const App: React.FC = () => {
   const [classes, setClasses] = useState<LearningClass[]>([]);
@@ -23,6 +34,7 @@ export const App: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [resources, setResources] = useState<ResourceItem[]>([]);
+  const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
 
   const [preferences] = useState<UserPreferences>(() =>
     preferencesService.getPreferences()
@@ -40,6 +52,7 @@ export const App: React.FC = () => {
 
   // Modals & search
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+  const [isPackImportModalOpen, setIsPackImportModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<LearningClass | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('All');
@@ -51,18 +64,20 @@ export const App: React.FC = () => {
       setClasses(cls);
 
       if (activeClassId) {
-        const [ch, ls, qz, att, res] = await Promise.all([
+        const [ch, ls, qz, att, res, subs] = await Promise.all([
           storage.getChapters(activeClassId),
           storage.getLessons(activeClassId),
           storage.getQuizzes(activeClassId),
           storage.getQuizAttempts(activeClassId),
           storage.getResources(activeClassId),
+          storage.getSubmissions(activeClassId),
         ]);
         setChapters(ch);
         setLessons(ls);
         setQuizzes(qz);
         setAttempts(att);
         setResources(res);
+        setSubmissions(subs);
       }
     } catch (err) {
       console.error('Failed to load data from IndexedDB:', err);
@@ -136,7 +151,7 @@ export const App: React.FC = () => {
   };
 
   // Lesson Actions
-  const handleAddLesson = async (chapterId: string, title: string) => {
+  const handleAddLesson = async (chapterId: string, title: string, content: string = '') => {
     if (!activeClassId) return;
     const chapterLessons = lessons.filter((l) => l.chapterId === chapterId);
     const newLesson: Lesson = {
@@ -144,7 +159,7 @@ export const App: React.FC = () => {
       classId: activeClassId,
       chapterId,
       title,
-      content: '',
+      content,
       order: chapterLessons.length + 1,
       isCompleted: false,
       updatedAt: Date.now(),
@@ -196,18 +211,34 @@ export const App: React.FC = () => {
     await refreshData();
   };
 
-  // Resource Actions
-  const handleUploadResource = async (file: File) => {
+  // Assignment Submission Action
+  const handleSaveSubmission = async (submission: AssignmentSubmission) => {
+    await storage.saveSubmission(submission);
+    await refreshData();
+  };
+
+  // Universal Resource Actions (Content extraction enabled)
+  const handleUploadResource = async (file: File, chapterId?: string, lessonId?: string) => {
     if (!activeClassId) return;
+
+    // Process & extract readable text client-side where possible
+    const extracted = await extractResourceContent(file);
+
     const resource: ResourceItem = {
       id: crypto.randomUUID(),
       classId: activeClassId,
+      chapterId,
+      lessonId,
       name: file.name,
       fileType: file.type || file.name.split('.').pop() || 'unknown',
       size: file.size,
       dataBlob: file,
+      extractedText: extracted.text || undefined,
+      status: extracted.status,
+      description: extracted.info,
       uploadedAt: Date.now(),
     };
+
     await storage.saveResource(resource);
     await refreshData();
   };
@@ -300,6 +331,7 @@ export const App: React.FC = () => {
             quizzes={quizzes}
             attempts={attempts}
             resources={resources}
+            submissions={submissions}
             selectedLessonId={activeLessonId}
             onSelectLesson={(id) => setActiveLessonId(id)}
             onBackToClasses={() => setActiveClassId(null)}
@@ -312,6 +344,7 @@ export const App: React.FC = () => {
             onSaveQuiz={handleSaveQuiz}
             onDeleteQuiz={handleDeleteQuiz}
             onRecordAttempt={handleRecordAttempt}
+            onSaveSubmission={handleSaveSubmission}
             onUploadResource={handleUploadResource}
             onDeleteResource={handleDeleteResource}
           />
@@ -329,21 +362,34 @@ export const App: React.FC = () => {
                 <h1 className="text-2xl font-bold tracking-tight text-stone-900">
                   My Learning Classes
                 </h1>
-                <p className="text-sm text-stone-500 mt-1">
+                <p className="text-xs text-stone-500 mt-1">
                   Organize subjects, structure syllabuses, read notes, and test your retention.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingClass(undefined);
-                  setIsClassModalOpen(true);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition cursor-pointer shadow-xs"
-              >
-                <Plus size={16} />
-                <span>New Class</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPackImportModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition cursor-pointer shadow-2xs"
+                  title="Import a structured JSON learning pack"
+                >
+                  <FileCode size={15} className="text-amber-600" />
+                  <span>Import Learning Pack</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingClass(undefined);
+                    setIsClassModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition cursor-pointer shadow-xs"
+                >
+                  <Plus size={15} />
+                  <span>New Class</span>
+                </button>
+              </div>
             </div>
 
             {/* Filter and Search Bar */}
@@ -358,7 +404,7 @@ export const App: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search classes, subjects, or tags..."
-                  className="w-full pl-9 pr-4 py-2 text-sm bg-stone-50 rounded-xl border border-stone-200 focus:outline-none focus:border-amber-500 focus:bg-white transition"
+                  className="w-full pl-9 pr-4 py-2 text-xs bg-stone-50 rounded-xl border border-stone-200 focus:outline-none focus:border-amber-500 focus:bg-white transition"
                 />
               </div>
 
@@ -388,20 +434,30 @@ export const App: React.FC = () => {
                   <BookOpen size={30} />
                 </div>
                 <h3 className="text-lg font-bold text-stone-800">No classes yet</h3>
-                <p className="text-sm text-stone-500 mt-1 mb-6">
-                  Create your first learning class (like Microsoft Excel, Copywriting, Content Strategy, or Human Resources) to begin your structured study.
+                <p className="text-xs text-stone-500 mt-1 mb-6 max-w-sm mx-auto">
+                  Create your first learning class or import a ready-made Learning Pack JSON to jumpstart your structured studies.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setIsClassModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white font-medium text-sm hover:bg-amber-700 transition cursor-pointer shadow-xs"
-                >
-                  <Plus size={16} />
-                  <span>Create First Class</span>
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsPackImportModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-medium text-xs hover:bg-stone-50 transition cursor-pointer"
+                  >
+                    <FileCode size={15} className="text-amber-600" />
+                    <span>Import Learning Pack</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsClassModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white font-medium text-xs hover:bg-amber-700 transition cursor-pointer shadow-xs"
+                  >
+                    <Plus size={15} />
+                    <span>Create First Class</span>
+                  </button>
+                </div>
               </div>
             ) : filteredClasses.length === 0 ? (
-              <div className="text-center py-12 text-stone-400 text-sm">
+              <div className="text-center py-12 text-stone-400 text-xs">
                 No classes match your current search and subject filters.
               </div>
             ) : (
@@ -511,6 +567,19 @@ export const App: React.FC = () => {
             setIsClassModalOpen(false);
             setEditingClass(undefined);
           }}
+        />
+      )}
+
+      {/* Learning Pack Import Modal */}
+      {isPackImportModalOpen && (
+        <LearningPackImportModal
+          existingClasses={classes}
+          onImportComplete={async (classId) => {
+            setIsPackImportModalOpen(false);
+            setActiveClassId(classId);
+            await refreshData();
+          }}
+          onClose={() => setIsPackImportModalOpen(false)}
         />
       )}
     </div>
