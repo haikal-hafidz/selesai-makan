@@ -5,11 +5,12 @@ import {
   ResourceItem,
   Quiz,
   QuizAttempt,
+  AssignmentSubmission,
   BackupPayload,
 } from '../types';
 
 const DB_NAME = 'selesai_makan_db';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // Version 3: Adds assignment_submissions store
 
 export class StorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -58,6 +59,13 @@ export class StorageService {
         if (!db.objectStoreNames.contains('quiz_attempts')) {
           const store = db.createObjectStore('quiz_attempts', { keyPath: 'id' });
           store.createIndex('quizId', 'quizId', { unique: false });
+          store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        // New in DB_VERSION 3
+        if (!db.objectStoreNames.contains('assignment_submissions')) {
+          const store = db.createObjectStore('assignment_submissions', { keyPath: 'id' });
+          store.createIndex('assignmentId', 'assignmentId', { unique: false });
           store.createIndex('classId', 'classId', { unique: false });
         }
       };
@@ -124,7 +132,7 @@ export class StorageService {
   }
 
   async deleteClass(id: string): Promise<void> {
-    // Cascade delete chapters, lessons, resources, quizzes
+    // Cascade delete chapters, lessons, resources, quizzes, and assignment submissions
     const chapters = await this.getChapters(id);
     for (const c of chapters) {
       await this.deleteChapter(c.id);
@@ -136,6 +144,10 @@ export class StorageService {
     const quizzes = await this.getQuizzes(id);
     for (const q of quizzes) {
       await this.deleteQuiz(q.id);
+    }
+    const submissions = await this.getSubmissions(id);
+    for (const s of submissions) {
+      await this.deleteSubmission(s.id);
     }
     return this.delete('classes', id);
   }
@@ -223,6 +235,25 @@ export class StorageService {
     return this.put<QuizAttempt>('quiz_attempts', attempt);
   }
 
+  // Assignment Submissions (New)
+  async getSubmissions(classId: string): Promise<AssignmentSubmission[]> {
+    const all = await this.getAll<AssignmentSubmission>('assignment_submissions');
+    return all.filter((s) => s.classId === classId).sort((a, b) => b.submittedAt - a.submittedAt);
+  }
+
+  async getSubmissionForAssignment(assignmentId: string): Promise<AssignmentSubmission | undefined> {
+    const all = await this.getAll<AssignmentSubmission>('assignment_submissions');
+    return all.find((s) => s.assignmentId === assignmentId);
+  }
+
+  async saveSubmission(submission: AssignmentSubmission): Promise<AssignmentSubmission> {
+    return this.put<AssignmentSubmission>('assignment_submissions', submission);
+  }
+
+  async deleteSubmission(id: string): Promise<void> {
+    return this.delete('assignment_submissions', id);
+  }
+
   // Backup and Restore
   async exportBackup(): Promise<string> {
     const classes = await this.getAll<LearningClass>('classes');
@@ -231,6 +262,7 @@ export class StorageService {
     const rawResources = await this.getAll<ResourceItem>('resources');
     const quizzes = await this.getAll<Quiz>('quizzes');
     const attempts = await this.getAll<QuizAttempt>('quiz_attempts');
+    const rawSubmissions = await this.getAll<AssignmentSubmission>('assignment_submissions');
 
     // Convert blobs to dataUrl strings for portable JSON backup if present
     const resourcesWithUrl = await Promise.all(
@@ -246,12 +278,47 @@ export class StorageService {
         return {
           id: r.id,
           classId: r.classId,
+          chapterId: r.chapterId,
           lessonId: r.lessonId,
           name: r.name,
           fileType: r.fileType,
           size: r.size,
+          description: r.description,
+          extractedText: r.extractedText,
+          status: r.status,
           dataUrl,
           uploadedAt: r.uploadedAt,
+        };
+      })
+    );
+
+    const submissionsWithUrl = await Promise.all(
+      rawSubmissions.map(async (s) => {
+        let dataUrl = s.dataUrl;
+        if (s.fileBlob && !dataUrl) {
+          dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(s.fileBlob!);
+          });
+        }
+        return {
+          id: s.id,
+          assignmentId: s.assignmentId,
+          classId: s.classId,
+          lessonId: s.lessonId,
+          submissionType: s.submissionType,
+          textResponse: s.textResponse,
+          fileName: s.fileName,
+          dataUrl,
+          evaluationMethod: s.evaluationMethod,
+          isEvaluated: s.isEvaluated,
+          score: s.score,
+          maxScore: s.maxScore,
+          rubricScores: s.rubricScores,
+          feedback: s.feedback,
+          submittedAt: s.submittedAt,
+          evaluatedAt: s.evaluatedAt,
         };
       })
     );
@@ -265,6 +332,7 @@ export class StorageService {
       resources: resourcesWithUrl,
       quizzes,
       attempts,
+      submissions: submissionsWithUrl,
     };
 
     return JSON.stringify(payload, null, 2);
@@ -306,12 +374,35 @@ export class StorageService {
     for (const a of payload.attempts || []) {
       await this.saveQuizAttempt(a);
     }
+    for (const s of payload.submissions || []) {
+      let fileBlob: Blob | undefined;
+      if (s.dataUrl) {
+        try {
+          const res = await fetch(s.dataUrl);
+          fileBlob = await res.blob();
+        } catch {
+          // ignore
+        }
+      }
+      await this.saveSubmission({
+        ...s,
+        fileBlob,
+      });
+    }
   }
 
   // Clear all data
   async resetAll(): Promise<void> {
     const db = await this.openDB();
-    const storeNames = ['classes', 'chapters', 'lessons', 'resources', 'quizzes', 'quiz_attempts'];
+    const storeNames = [
+      'classes',
+      'chapters',
+      'lessons',
+      'resources',
+      'quizzes',
+      'quiz_attempts',
+      'assignment_submissions',
+    ];
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeNames, 'readwrite');
       storeNames.forEach((s) => transaction.objectStore(s).clear());

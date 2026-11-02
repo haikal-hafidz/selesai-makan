@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, X, ExternalLink } from 'lucide-react';
+import { FileText, Download, X, ExternalLink, BookOpen } from 'lucide-react';
 import { ResourceItem } from '../types';
 
 interface ResourcePreviewModalProps {
   resource: ResourceItem;
   onClose: () => void;
+  onCreateLessonFromText?: (title: string, text: string) => void;
 }
 
-export const ResourcePreviewModal: React.FC<ResourcePreviewModalProps> = ({ resource, onClose }) => {
+export const ResourcePreviewModal: React.FC<ResourcePreviewModalProps> = ({
+  resource,
+  onClose,
+  onCreateLessonFromText,
+}) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,8 +42,11 @@ export const ResourcePreviewModal: React.FC<ResourcePreviewModalProps> = ({ reso
   };
 
   const isPdf =
-    resource.fileType.includes('pdf') ||
-    resource.name.toLowerCase().endsWith('.pdf');
+    resource.fileType.includes('pdf') || resource.name.toLowerCase().endsWith('.pdf');
+  const isImage =
+    resource.fileType.startsWith('image/') ||
+    /\.(png|jpe?g|gif|webp|svg)$/i.test(resource.name);
+  const hasExtractedText = !!resource.extractedText && resource.extractedText.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 sm:p-6">
@@ -54,10 +62,25 @@ export const ResourcePreviewModal: React.FC<ResourcePreviewModalProps> = ({ reso
               <p className="text-xs text-stone-500">
                 {(resource.size / (1024 * 1024)).toFixed(2)} MB • Uploaded{' '}
                 {new Date(resource.uploadedAt).toLocaleDateString()}
+                {resource.status === 'extracted' && ' • Content Processed'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {hasExtractedText && onCreateLessonFromText && (
+              <button
+                type="button"
+                onClick={() => {
+                  const cleanedTitle = resource.name.replace(/\.[^/.]+$/, '');
+                  onCreateLessonFromText(`Notes from: ${cleanedTitle}`, resource.extractedText!);
+                  onClose();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-xs font-medium text-white hover:bg-amber-700 transition cursor-pointer shadow-xs"
+              >
+                <BookOpen size={14} />
+                <span>Create Lesson from Content</span>
+              </button>
+            )}
             {objectUrl && (
               <>
                 <button
@@ -91,21 +114,42 @@ export const ResourcePreviewModal: React.FC<ResourcePreviewModalProps> = ({ reso
 
         {/* Content Viewer */}
         <div className="flex-1 bg-stone-100 overflow-hidden flex items-center justify-center p-2">
-          {isPdf && objectUrl ? (
+          {hasExtractedText ? (
+            <div className="w-full h-full bg-white rounded-xl p-6 overflow-y-auto border border-stone-200 shadow-inner">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-stone-100">
+                <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded">
+                  Processed Readable Text Content
+                </span>
+                <span className="text-xs text-stone-400">
+                  {resource.extractedText!.length} characters
+                </span>
+              </div>
+              <pre className="font-mono text-xs whitespace-pre-wrap text-stone-800 leading-relaxed font-sans">
+                {resource.extractedText}
+              </pre>
+            </div>
+          ) : isPdf && objectUrl ? (
             <iframe
               src={objectUrl}
               title={resource.name}
               className="w-full h-full rounded border-0 bg-white"
             />
+          ) : isImage && objectUrl ? (
+            <div className="flex items-center justify-center h-full p-4">
+              <img
+                src={objectUrl}
+                alt={resource.name}
+                className="max-h-full max-w-full rounded-lg object-contain shadow-md"
+              />
+            </div>
           ) : (
             <div className="text-center p-8 max-w-md bg-white rounded-xl shadow-xs border border-stone-200">
               <div className="w-16 h-16 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center mx-auto mb-4">
                 <FileText size={32} />
               </div>
-              <h3 className="text-lg font-semibold text-stone-800 mb-2">Non-PDF File Preview</h3>
-              <p className="text-sm text-stone-600 mb-6">
-                Direct in-app embedded preview is tailored for PDFs and ebooks. You can download or open
-                this file in a new tab.
+              <h3 className="text-lg font-semibold text-stone-800 mb-2">Stored Attachment</h3>
+              <p className="text-sm text-stone-600 mb-6 leading-relaxed">
+                This document is safely stored locally in your IndexedDB. Client-side preview is not available for this binary format, but it remains fully accessible for offline download or opening.
               </p>
               {objectUrl && (
                 <button
