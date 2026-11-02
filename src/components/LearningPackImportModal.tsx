@@ -8,12 +8,17 @@ import {
   Layers,
   X,
   ArrowRight,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 import {
   LearningPackValidationResult,
   LearningClass,
 } from '../types';
 import { validateLearningPack, importLearningPack } from '../services/learningPack';
+import { UNIVERSAL_AI_LEARNING_PACK_PROMPT } from '../services/aiPromptTemplate';
 
 interface LearningPackImportModalProps {
   existingClasses: LearningClass[];
@@ -36,6 +41,34 @@ export const LearningPackImportModal: React.FC<LearningPackImportModalProps> = (
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successSummary, setSuccessSummary] = useState<string | null>(null);
+
+  // AI Prompt copy & preview state
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+  const [copiedStatus, setCopiedStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+
+  const handleCopyPrompt = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(UNIVERSAL_AI_LEARNING_PACK_PROMPT);
+      } else {
+        // Fallback for non-secure contexts or older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = UNIVERSAL_AI_LEARNING_PACK_PROMPT;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedStatus('copied');
+      setTimeout(() => setCopiedStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Failed to copy prompt to clipboard:', err);
+      setCopiedStatus('error');
+      setTimeout(() => setCopiedStatus('idle'), 3500);
+    }
+  };
 
   const handleFileSelected = (file: File) => {
     setFileName(file.name);
@@ -143,30 +176,111 @@ export const LearningPackImportModal: React.FC<LearningPackImportModalProps> = (
 
           {/* 1. File Upload Dropzone */}
           {!validation && (
-            <div className="border-2 border-dashed border-stone-300 hover:border-amber-400 rounded-2xl p-10 text-center transition bg-stone-50/50">
-              <FileCode size={40} className="mx-auto text-amber-600 mb-3" />
-              <h3 className="text-base font-semibold text-stone-800 mb-1">
-                Select or drop your Learning Pack JSON
-              </h3>
-              <p className="text-xs text-stone-500 max-w-md mx-auto mb-4">
-                Structured file containing class syllabus, lesson notes, exercises, quizzes, assignments, and resources.
-              </p>
-              <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs transition cursor-pointer shadow-xs">
-                <span>Browse JSON File</span>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFileSelected(f);
-                  }}
-                  className="hidden"
-                />
-              </label>
+            <div className="space-y-6">
+              <div className="border-2 border-dashed border-stone-300 hover:border-amber-400 rounded-2xl p-10 text-center transition bg-stone-50/50">
+                <FileCode size={40} className="mx-auto text-amber-600 mb-3" />
+                <h3 className="text-base font-semibold text-stone-800 mb-1">
+                  Select or drop your Learning Pack JSON
+                </h3>
+                <p className="text-xs text-stone-500 max-w-md mx-auto mb-4">
+                  Structured file containing class syllabus, lesson notes, exercises, quizzes, assignments, and resources.
+                </p>
+                <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs transition cursor-pointer shadow-xs">
+                  <span>Browse JSON File</span>
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleFileSelected(f);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* 2. Reusable Master AI Prompt Section */}
+              <div className="bg-stone-50 rounded-2xl border border-stone-200 p-5 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={16} className="text-amber-600" />
+                      <h3 className="text-sm font-bold text-stone-900">Create a Learning Pack with AI</h3>
+                    </div>
+                    <p className="text-xs text-stone-600 mt-1 max-w-xl leading-relaxed">
+                      Copy our official master prompt and provide it to any external AI assistant (ChatGPT, Claude, Gemini, or local models) along with your ebook, document, or learning source to generate a fully compatible Learning Pack JSON.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-stone-900 px-2.5 py-1.5 rounded-lg border border-stone-300 hover:bg-stone-100 transition cursor-pointer"
+                    >
+                      {isPromptExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      <span>{isPromptExpanded ? 'Hide Prompt' : 'Inspect Prompt'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyPrompt}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer shadow-2xs"
+                    >
+                      {copiedStatus === 'copied' ? (
+                        <>
+                          <CheckCircle2 size={14} className="text-amber-200" />
+                          <span>Copied to Clipboard!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          <span>Copy AI Prompt</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {copiedStatus === 'error' && (
+                  <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs flex items-center gap-2">
+                    <AlertCircle size={14} />
+                    <span>Failed to copy automatically. Please inspect the prompt and copy manually.</span>
+                  </div>
+                )}
+
+                {/* Instructions steps */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs text-stone-600 border-t border-stone-200/60">
+                  <div className="p-2.5 bg-white rounded-xl border border-stone-200/80">
+                    <span className="font-bold text-stone-900 block mb-0.5">1. Copy Master Prompt</span>
+                    <span>Click the button above to copy the universal v1.1 prompt to your clipboard.</span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-xl border border-stone-200/80">
+                    <span className="font-bold text-stone-900 block mb-0.5">2. Attach Your Source</span>
+                    <span>Paste into ChatGPT, Claude, or Gemini and attach your PDF, ebook, or notes.</span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-xl border border-stone-200/80">
+                    <span className="font-bold text-stone-900 block mb-0.5">3. Import JSON Here</span>
+                    <span>Save the AI's JSON output as a <code className="font-mono text-[11px] bg-stone-100 px-1 rounded">.json</code> file and drop it into the box above.</span>
+                  </div>
+                </div>
+
+                {/* Expandable Prompt Preview */}
+                {isPromptExpanded && (
+                  <div className="pt-2 space-y-2 border-t border-stone-200">
+                    <div className="flex items-center justify-between text-xs text-stone-500 font-semibold uppercase tracking-wider">
+                      <span>Full Master Prompt Content</span>
+                      <span>Ready for any subject</span>
+                    </div>
+                    <pre className="p-4 bg-stone-900 text-stone-100 font-mono text-xs rounded-xl overflow-x-auto max-h-72 leading-relaxed whitespace-pre-wrap select-all">
+                      {UNIVERSAL_AI_LEARNING_PACK_PROMPT}
+                    </pre>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* 2. Validation & Preview Panel */}
+          {/* 3. Validation & Preview Panel */}
           {validation && (
             <div className="space-y-6">
               {/* File details pill */}
