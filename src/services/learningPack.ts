@@ -8,8 +8,37 @@ import {
   ResourceItem,
   Assignment,
   LearningPackAssignment,
+  AnswerKeyType,
 } from '../types';
 import { storage } from './storage';
+
+/**
+ * Normalizes answerKey or answerKeyOrModelAnswer from either a raw string or an object { type, content }
+ * into a safe string, avoiding runtime TypeError when calling string methods.
+ */
+export function normalizeAnswerKey(answerKey?: AnswerKeyType | unknown): string | undefined {
+  if (!answerKey) return undefined;
+  if (typeof answerKey === 'string') {
+    const trimmed = answerKey.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof answerKey === 'object' && answerKey !== null) {
+    const obj = answerKey as { content?: unknown; text?: unknown; answer?: unknown };
+    if (typeof obj.content === 'string') {
+      const trimmed = obj.content.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof obj.text === 'string') {
+      const trimmed = obj.text.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof obj.answer === 'string') {
+      const trimmed = obj.answer.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+  }
+  return undefined;
+}
 
 /**
  * Validates a JSON Learning Pack structure (Supports both v1.0 and expanded v1.1)
@@ -315,6 +344,7 @@ export async function importLearningPack(
         // Process assignments in lesson
         const lessonAssignments: Assignment[] = (rawLesson.assignments || []).map((a) => {
           totalAssignments++;
+          const resolvedAnswerKey = normalizeAnswerKey(a.answerKeyOrModelAnswer || a.answerKey);
           return {
             id: crypto.randomUUID(),
             title: a.title,
@@ -322,7 +352,7 @@ export async function importLearningPack(
             instructions: a.instructions,
             submissionType: a.submissionType || 'text',
             rubric: a.rubric,
-            answerKeyOrModelAnswer: a.answerKeyOrModelAnswer,
+            answerKeyOrModelAnswer: resolvedAnswerKey,
             attachmentResourceNames: a.attachmentResourceNames,
           };
         });
@@ -372,7 +402,8 @@ export async function importLearningPack(
               });
             }
             if (assign.answerKeyOrModelAnswer) {
-              assignmentsText += `\n> **Model Answer / Answer Key Guide:**\n> ${assign.answerKeyOrModelAnswer.replace(/\n/g, '\n> ')}\n`;
+              const safeKeyStr = String(assign.answerKeyOrModelAnswer);
+              assignmentsText += `\n> **Model Answer / Answer Key Guide:**\n> ${safeKeyStr.replace(/\n/g, '\n> ')}\n`;
             }
           });
           if (!lessonMarkdown.includes('### Practical Assignments & Tasks')) {
@@ -455,8 +486,9 @@ export async function importLearningPack(
             assignContent += `- **${r.criteria}**${r.points ? ` (${r.points} pts)` : ''}: ${r.description}\n`;
           });
         }
-        if (ca.answerKeyOrModelAnswer) {
-          assignContent += `\n> **Evaluation Model Guide:**\n> ${ca.answerKeyOrModelAnswer.replace(/\n/g, '\n> ')}\n`;
+        const normalizedCaAnswerKey = normalizeAnswerKey(ca.answerKeyOrModelAnswer || ca.answerKey);
+        if (normalizedCaAnswerKey) {
+          assignContent += `\n> **Evaluation Model Guide:**\n> ${normalizedCaAnswerKey.replace(/\n/g, '\n> ')}\n`;
         }
 
         const classAssignment: Assignment = {
@@ -469,7 +501,7 @@ export async function importLearningPack(
           submissionType: ca.submissionType || 'text',
           evaluationMethod: ca.evaluationMethod || (ca.rubric && ca.rubric.length > 0 ? 'rubric' : 'self_assessment'),
           rubric: ca.rubric,
-          answerKeyOrModelAnswer: ca.answerKeyOrModelAnswer,
+          answerKeyOrModelAnswer: normalizedCaAnswerKey,
           attachmentResourceNames: ca.attachmentResourceNames,
         };
 
@@ -554,8 +586,9 @@ export async function importLearningPack(
         projContent += `\n`;
       }
 
-      if (finalProject.answerKey) {
-        projContent += `> **Model Solution & Reference Guidance:**\n> ${finalProject.answerKey.replace(/\n/g, '\n> ')}\n\n`;
+      const normalizedFpAnswerKey = normalizeAnswerKey(finalProject.answerKey);
+      if (normalizedFpAnswerKey) {
+        projContent += `> **Model Solution & Reference Guidance:**\n> ${normalizedFpAnswerKey.replace(/\n/g, '\n> ')}\n\n`;
       }
 
       const projLessonId = crypto.randomUUID();
@@ -597,7 +630,7 @@ export async function importLearningPack(
         submissionType: 'file',
         evaluationMethod: mappedRubric ? 'rubric' : 'self_assessment',
         rubric: mappedRubric,
-        answerKeyOrModelAnswer: finalProject.answerKey,
+        answerKeyOrModelAnswer: normalizedFpAnswerKey,
       };
 
       await storage.saveLesson({
