@@ -1,136 +1,138 @@
-# Selesai Makan — Official Learning Pack Specification & AI Prompt Template
+# Selesai Makan — Official Learning Pack Specification & Master AI Prompt
 
 **Schema Version:** `1.1` (Backwards compatible with `1.0`)
 
 This document defines the official standard for **Selesai Makan Learning Packs (`.json`)**.
-External AI assistants (e.g. Claude, ChatGPT, Gemini, local LLMs) can use this exact template to generate rich, self-contained educational courses and practice tracks from raw ebooks, notes, or curricula.
+External AI assistants (e.g. Claude, ChatGPT, Gemini, local LLMs) can use the master prompt below to transform raw ebooks, documents, transcripts, or curriculum guides into complete, import-ready educational courses.
 
 ---
 
-## 1. System Prompt for External AI Assistants
+## 1. Master Universal AI Prompt
 
-When asking an AI to generate a Learning Pack from a book, article, or topic, include this prompt:
+Copy and paste this prompt directly into your AI assistant along with your source material (PDF, ebook, article, or notes):
 
 ```text
-You are an instructional designer and curriculum specialist.
-Create a complete, ready-to-study course for the "Selesai Makan" Personal Learning Hub.
+You are an expert instructional designer, curriculum specialist, and educational architect.
 
-Output ONLY a valid JSON object matching the Selesai Makan Learning Pack v1.1 schema.
-Do NOT output markdown code blocks (```json) or conversational text around the JSON.
+Your task is to analyze the provided learning material (an ebook, article, transcript, syllabus, or notes) and transform it into a complete, structured, and import-ready Selesai Makan Learning Pack JSON (schemaVersion: "1.1").
 
-Key Requirements:
-1. Provide full, thorough instructional markdown in "content" (not brief summaries).
-2. Include concrete examples, key takeaways, and practical exercises.
-3. Design realistic assignments with instructions and rubrics adapted to the subject:
-   - For technical/data courses (e.g., Excel): spreadsheet exercises & formulas.
-   - For writing/marketing (e.g., Copywriting): drafting headlines & critiques.
-   - For management/HR: case studies and rubric-based evaluations.
-4. Include interactive multiple-choice quizzes with clear answer rationale ("explanation").
-5. If source material includes reference tables or cheatsheets, include them under "resources" as "contentText".
-```
+Output ONLY a single valid JSON object matching the official Selesai Makan Learning Pack v1.1 schema.
+Do NOT enclose the output in conversational text. If using markdown code fences, use only ```json and ```.
 
 ---
 
-## 2. Complete JSON Template & Field Reference
+### CORE INSTRUCTIONAL PRINCIPLES
 
-```json
+1. COMPREHENSIVE INSTRUCTION, NOT SUMMARIES:
+   - Provide full, thorough instructional markdown in each lesson's "content" field.
+   - Teach the concepts in detail, including background principles, step-by-step methodologies, real-world examples, pro tips, and warnings about common mistakes.
+   - Do not output brief summaries or bullet-point overviews when substantive explanations can be provided.
+
+2. SUBJECT-ADAPTIVE PEDAGOGY:
+   - Adapt the activities and evaluations to the discipline of the source:
+     * Data/Technical (e.g. Excel, SQL, Analytics): Spreadsheet tasks, formula structures, dataset analysis, and dynamic models.
+     * Writing/Marketing (e.g. Copywriting, Content Strategy): Headline writing, persuasive briefs, critique exercises, and tone revisions.
+     * Management & HR (e.g. Human Resources, Leadership): Case study evaluations, structured interview frameworks, and policy drafting.
+     * Psychology & Behavioral Sciences: Conceptual analysis, scenario interpretation, and behavioral rubrics.
+     * Software & Engineering: Code implementations, architecture reviews, and debugging assignments.
+   - Do not force every subject into the same format. Choose activities that genuinely fit the material.
+
+3. STRUCTURE & PROGRESSION:
+   - Preserve the logical hierarchy of the source material.
+   - Divide the course into cohesive Chapters, and break each Chapter into focused, sequentially ordered Lessons.
+
+4. REALISTIC PRACTICAL ASSIGNMENTS & RUBRICS:
+   - Include realistic practical assignments (in lesson "assignments" or course-level "assignments").
+   - Define clear step-by-step "instructions", the expected "submissionType" ('text' | 'file' | 'spreadsheet' | 'code' | 'url' | 'none'), and an "evaluationMethod" ('rubric' | 'self_assessment' | 'automatic').
+   - For rubric assignments, provide explicit criteria with points and descriptions.
+   - Where applicable, provide an "answerKeyOrModelAnswer" with a model solution or evaluation benchmark.
+
+5. INTERACTIVE KNOWLEDGE CHECKS (QUIZZES):
+   - Include multiple-choice questions testing core concepts and common misconceptions.
+   - Every question must include clear, educational "explanation" text explaining why the correct option is right and others are wrong.
+   - "correctOptionIndex" must be a 0-indexed integer pointing to the correct entry in the "options" array.
+
+6. SUPPLEMENTARY RESOURCES & TEMPLATES:
+   - Under "resources", provide cheatsheets, formula references, tables, or starter data as "contentText".
+   - Do NOT invent fake binary files or external download links.
+
+7. LARGE SOURCE HANDLING:
+   - If the source is too large to fit in a single output, generate Part 1 (foundational chapters) with high depth, and indicate how remaining chapters will continue the sequence without omitting essential depth.
+
+---
+
+### OFFICIAL JSON SCHEMA STRUCTURE (v1.1)
+
 {
   "schemaVersion": "1.1",
   "class": {
-    "title": "Microsoft Excel: Advanced Data Analysis & Modeling",
-    "description": "Master dynamic formulas, XLOOKUP, PivotTables, and financial forecasting with hands-on practice.",
-    "subject": "Microsoft Excel",
-    "level": "Intermediate",
+    "title": "Full Course Title",
+    "description": "Comprehensive course description and learning scope",
+    "subject": "Microsoft Excel | Copywriting | Content Strategy | Human Resources | Psychology | Other",
+    "level": "Beginner | Intermediate | Advanced | All Levels",
     "language": "English",
-    "tags": ["Excel", "Data Analysis", "Formulas", "Financial Modeling"],
+    "tags": ["Tag1", "Tag2"],
     "color": "#059669",
     "learningObjectives": [
-      "Construct robust spreadsheet models with modern dynamic array functions",
-      "Automate multi-criteria lookup workflows safely",
-      "Build interactive executive summary dashboards"
+      "Key course learning objective 1",
+      "Key course learning objective 2"
     ],
     "finalProject": {
-      "title": "Comprehensive 3-Year Corporate Budget Model",
-      "brief": "Design a dynamic, fully linked 3-year departmental budget and variance analysis workbook.",
+      "title": "Culminating Capstone Project Title",
+      "brief": "Detailed project brief and expectations",
       "milestones": [
-        "Phase 1: Build input assumption table and validation rules",
-        "Phase 2: Assemble P&L forecast with dynamic monthly lookups",
-        "Phase 3: Design executive dashboard with KPI variance indicators"
+        "Milestone 1: Research and planning",
+        "Milestone 2: Execution and draft",
+        "Milestone 3: Final review and polish"
       ],
-      "submissionGuidelines": "Submit an .xlsx workbook with zero hardcoded formula values.",
+      "submissionGuidelines": "Specific file format or presentation requirements",
       "evaluationRubric": [
-        {
-          "criteria": "Formula Dynamic Structure",
-          "description": "Utilizes dynamic arrays and exact match lookups without legacy #N/A risks."
-        },
-        {
-          "criteria": "Financial Integrity & Formatting",
-          "description": "Clear number formatting, assumption separation, and self-documenting comments."
-        }
+        { "criteria": "Concept Mastery", "description": "Demonstrates full understanding of principles" },
+        { "criteria": "Practical Execution", "description": "Accurate, well-formatted deliverable" }
       ]
     }
   },
   "chapters": [
     {
-      "title": "Chapter 1: Modern Lookup & Dynamic Arrays",
-      "description": "Transitioning from VLOOKUP to XLOOKUP and dynamic matrix functions",
+      "title": "Chapter 1: Chapter Name",
+      "description": "Chapter overview and scope",
       "order": 1,
       "lessons": [
         {
-          "title": "Lesson 1.1: XLOOKUP vs Legacy Lookups",
-          "content": "# XLOOKUP vs Legacy Lookups\n\nXLOOKUP replaces `VLOOKUP`, `HLOOKUP`, and `LOOKUP` with safer default behavior.\n\n### Why XLOOKUP is Superior\n1. **Defaults to Exact Match**: Eliminates false matches.\n2. **Left-Lookup Native**: Does not require column index count calculations.\n3. **Built-in Error Handling**: Uses the optional `if_not_found` parameter.\n\n```excel\n=XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode])\n```\n\n> *Pro Tip:* Always separate your Raw Data table from your Reporting Presentation table.",
-          "learningObjectives": [
-            "Explain why left-lookup failed in traditional VLOOKUP",
-            "Implement XLOOKUP with fallback values"
-          ],
-          "keyTakeaways": [
-            "XLOOKUP defaults to exact match (0)",
-            "Return arrays can span multiple columns simultaneously"
-          ],
-          "exercises": [
-            "Write a formula to look up employee ID 1045 and return both Name and Department in one formula.",
-            "Test replacing an IFERROR(VLOOKUP(...)) wrapper with XLOOKUP's built-in argument."
-          ],
+          "title": "Lesson 1.1: Lesson Title",
+          "content": "# Markdown Instructional Content\\n\\nThorough explanations, code blocks, tables, and examples...",
+          "learningObjectives": ["Specific lesson objective 1"],
+          "keyTakeaways": ["Key takeaway point 1"],
+          "exercises": ["Quick practical exercise prompt 1"],
           "assignments": [
             {
-              "title": "Employee Bonus Schedule Lookup Task",
-              "description": "Given a tiered revenue performance table, build a lookup formula that returns corresponding commission rates.",
+              "title": "Practical Task Title",
+              "description": "Task brief and expected deliverable",
               "instructions": [
-                "Inspect the provided commission tier matrix.",
-                "Implement an XLOOKUP with match_mode -1 (exact match or next smaller item).",
-                "Ensure commission payouts correctly compute for target ranges."
+                "Step 1: Download or review provided materials",
+                "Step 2: Execute the assigned workflow",
+                "Step 3: Document your reasoning"
               ],
-              "submissionType": "spreadsheet",
+              "submissionType": "spreadsheet | text | file | code | url | none",
+              "evaluationMethod": "rubric | self_assessment | automatic",
               "rubric": [
-                {
-                  "criteria": "Exact Match vs Approx Match Selection",
-                  "points": 50,
-                  "description": "Correctly chooses approximate matching mode -1 for tiered thresholds."
-                },
-                {
-                  "criteria": "Formula Modularity",
-                  "points": 50,
-                  "description": "References structured table headers rather than hardcoded column numbers."
-                }
+                { "criteria": "Accuracy", "points": 50, "description": "Correct technical execution" },
+                { "criteria": "Completeness", "points": 50, "description": "All steps addressed thoroughly" }
               ],
-              "answerKeyOrModelAnswer": "=XLOOKUP(D2, Tiers[SalesTarget], Tiers[CommissionRate], 0, -1)"
+              "answerKeyOrModelAnswer": "Model answer, formula key, or benchmark solution guide...",
+              "attachmentResourceNames": ["starter-template.txt"]
             }
           ],
           "order": 1,
           "quiz": {
-            "title": "XLOOKUP Mastery Assessment",
-            "description": "Verify your understanding of lookup arguments and error handling.",
+            "title": "Lesson Knowledge Check",
+            "description": "Verify your understanding of key concepts.",
             "questions": [
               {
-                "prompt": "What is the default match mode for XLOOKUP if omitted?",
-                "options": [
-                  "Exact match (0)",
-                  "Approximate match (1)",
-                  "Wildcard match (2)",
-                  "Reverse match (-1)"
-                ],
+                "prompt": "Conceptual question text?",
+                "options": ["Option A", "Option B", "Option C", "Option D"],
                 "correctOptionIndex": 0,
-                "explanation": "Unlike VLOOKUP which defaulted to approximate matching (TRUE/1), XLOOKUP defaults safely to exact matching (0)."
+                "explanation": "Detailed explanation of why Option A is correct."
               }
             ]
           }
@@ -140,36 +142,11 @@ Key Requirements:
   ],
   "resources": [
     {
-      "name": "excel-formula-quick-reference.txt",
+      "name": "reference-guide.txt",
       "fileType": "text/plain",
-      "description": "Cheatsheet of essential modern formulas",
-      "contentText": "XLOOKUP: =XLOOKUP(val, lookup_rng, return_rng, \"Not Found\")\nFILTER: =FILTER(array, include_criteria, \"Empty\")\nUNIQUE: =UNIQUE(array)\nSORT: =SORT(array, sort_index, sort_order)"
+      "description": "Reference cheatsheet or starter template",
+      "contentText": "Detailed text content, cheatsheet data, or reference notes..."
     }
   ]
 }
 ```
-
----
-
-## 3. Schema Rules and Guidelines
-
-1. **Root Object:**
-   * `schemaVersion`: `"1.1"` (or `"1.0"`).
-   * `class`: Course metadata object (Required).
-   * `chapters`: Array of chapter objects (Required).
-   * `finalProject`: Optional culminating project specifications.
-   * `resources`: Array of supplementary documents or reference attachments.
-
-2. **Lessons (`class.chapters[].lessons`):**
-   * `title` (Required): String.
-   * `content` (Required): Comprehensive Markdown text (with headings, code blocks, bullet points).
-   * `learningObjectives`: Array of strings (Optional).
-   * `keyTakeaways`: Array of strings (Optional).
-   * `exercises`: Array of practical prompts/tasks (Optional).
-   * `assignments`: Array of structured assignments with instructions, submission types, and rubrics (Optional).
-   * `quiz`: Interactive multiple-choice check with question list, zero-indexed `correctOptionIndex`, and explanatory notes (Optional).
-
-3. **Resources (`resources`):**
-   * `name`: File name with extension (e.g. `.txt`, `.csv`, `.pdf`, `.md`).
-   * `contentText`: Plain text, markdown, or CSV data for text-based materials.
-   * `contentBase64`: Data URL base64 string for binary attachments (PDF, images, etc.).

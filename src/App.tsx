@@ -26,8 +26,11 @@ import { ClassModal } from './components/ClassModal';
 import { Classroom } from './components/Classroom';
 import { BackupSettings } from './components/BackupSettings';
 import { LearningPackImportModal } from './components/LearningPackImportModal';
+import { LoadingScreen } from './components/LoadingScreen';
+import { OfflineStatusIndicator } from './components/OfflineStatusIndicator';
 
 export const App: React.FC = () => {
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [classes, setClasses] = useState<LearningClass[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -62,6 +65,16 @@ export const App: React.FC = () => {
     try {
       const cls = await storage.getClasses();
       setClasses(cls);
+    } catch (err) {
+      console.error('Failed to load data from IndexedDB:', err);
+    } finally {
+      // Remove opening loading screen once initial database sync concludes
+      setIsInitialLoading(false);
+    }
+  };
+
+  const reloadSubCollections = async () => {
+    try {
 
       if (activeClassId) {
         const [ch, ls, qz, att, res, subs] = await Promise.all([
@@ -80,12 +93,16 @@ export const App: React.FC = () => {
         setSubmissions(subs);
       }
     } catch (err) {
-      console.error('Failed to load data from IndexedDB:', err);
+      console.error('Failed to load subcollections from IndexedDB:', err);
     }
   };
 
   useEffect(() => {
     refreshData();
+  }, []);
+
+  useEffect(() => {
+    reloadSubCollections();
   }, [activeClassId]);
 
   // Sync preferences on change
@@ -263,6 +280,9 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900">
+      {/* Opening loading screen (shown only during initial app initialization) */}
+      {isInitialLoading && <LoadingScreen />}
+
       {/* Top Main Navigation */}
       <header className="sticky top-0 z-40 bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -287,6 +307,7 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <OfflineStatusIndicator />
             <button
               type="button"
               onClick={() => {
@@ -314,7 +335,7 @@ export const App: React.FC = () => {
               }`}
             >
               <HardDrive size={14} />
-              <span>Storage & Backups</span>
+              <span className="hidden sm:inline">Storage & Backups</span>
             </button>
           </div>
         </div>
