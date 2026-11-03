@@ -36,6 +36,8 @@ import { PracticeCenter } from './PracticeCenter';
 import { AssignmentWorkspace } from './AssignmentWorkspace';
 import { ProgressDashboard } from './ProgressDashboard';
 import { exportLearningPack } from '../services/learningPack';
+import { generateExcelPracticeWorkbook } from '../services/excelWorkbookGenerator';
+import { FileSpreadsheet } from 'lucide-react';
 
 interface ClassroomProps {
   learningClass: LearningClass;
@@ -161,6 +163,20 @@ export const Classroom: React.FC<ClassroomProps> = ({
       updatedAt: Date.now(),
     });
     setIsEditingLesson(false);
+  };
+
+  const handleDownloadExcelWorkbook = () => {
+    if (!activeLesson) return;
+    const blob = generateExcelPracticeWorkbook(activeLesson, lessonAssignments[0]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeTitle = activeLesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    a.download = `practice-${safeTitle}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleExportClassLearningPack = async () => {
@@ -528,6 +544,15 @@ export const Classroom: React.FC<ClassroomProps> = ({
                         </h2>
                       </div>
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleDownloadExcelWorkbook}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-900 text-xs font-medium transition cursor-pointer shadow-2xs"
+                          title="Download prepared hands-on Excel practice workbook (.xlsx)"
+                        >
+                          <FileSpreadsheet size={15} className="text-emerald-700" />
+                          <span>Download Practice .XLSX</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => onToggleLessonComplete(activeLesson.id)}
