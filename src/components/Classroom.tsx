@@ -131,25 +131,58 @@ export const Classroom: React.FC<ClassroomProps> = ({
 
   // If class has a final project, ensure it's also available as an assignment in Practice if not already in allAssignments
   if (learningClass.finalProject) {
-    const hasFinalProjectAssignment = allAssignments.some((a) => a.title === learningClass.finalProject!.title);
+    const fp = learningClass.finalProject;
+    const fpTitle = fp.title || 'Final Capstone Project';
+    const hasFinalProjectAssignment = allAssignments.some((a) => a.title === fpTitle);
     if (!hasFinalProjectAssignment) {
+      const instructions =
+        (fp.instructions && fp.instructions.length > 0)
+          ? fp.instructions
+          : (fp.milestones && fp.milestones.length > 0)
+          ? fp.milestones
+          : ['Review the project brief and requirements.', 'Complete the deliverable.', 'Submit your final output.'];
+
+      const deliverables =
+        (fp.deliverables && fp.deliverables.length > 0)
+          ? fp.deliverables
+          : fp.submissionGuidelines
+          ? [fp.submissionGuidelines]
+          : [];
+
+      const rubricItems = fp.rubric || fp.evaluationRubric || [];
+      const rubric = rubricItems.length > 0
+        ? rubricItems.map((r) => {
+            let pts = r.points;
+            if (pts === undefined && r.weight) {
+              const numericWeight = typeof r.weight === 'number' ? r.weight : parseFloat(String(r.weight).replace('%', ''));
+              if (!isNaN(numericWeight)) {
+                pts = numericWeight;
+              }
+            }
+            if (pts === undefined) {
+              pts = Math.round(100 / rubricItems.length);
+            }
+            return {
+              criteria: r.criteria,
+              weight: r.weight,
+              points: pts,
+              description: r.description,
+            };
+          })
+        : undefined;
+
       allAssignments.push({
         id: `final-project-${learningClass.id}`,
         classId: learningClass.id,
-        title: learningClass.finalProject.title || 'Final Capstone Project',
-        description: learningClass.finalProject.brief || 'Course culminating final project.',
-        instructions: (learningClass.finalProject.milestones && learningClass.finalProject.milestones.length > 0)
-          ? learningClass.finalProject.milestones
-          : ['Review the final project brief and guidelines.', 'Complete the deliverable.', 'Submit your final output.'],
+        title: fpTitle,
+        description: fp.description || fp.brief || 'Course culminating final project.',
+        objectives: fp.objectives,
+        instructions,
+        deliverables,
         submissionType: 'file',
-        evaluationMethod: (learningClass.finalProject.evaluationRubric && learningClass.finalProject.evaluationRubric.length > 0) ? 'rubric' : 'self_assessment',
-        rubric: (learningClass.finalProject.evaluationRubric && learningClass.finalProject.evaluationRubric.length > 0)
-          ? learningClass.finalProject.evaluationRubric.map((r) => ({
-              criteria: r.criteria,
-              points: Math.round(100 / learningClass.finalProject!.evaluationRubric!.length),
-              description: r.description,
-            }))
-          : undefined,
+        evaluationMethod: rubric ? 'rubric' : 'self_assessment',
+        rubric,
+        answerKeyOrModelAnswer: fp.answerKey,
       });
     }
   }

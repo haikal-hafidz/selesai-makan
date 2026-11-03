@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { AssignmentWorkspace } from '../components/AssignmentWorkspace';
 import { Assignment } from '../types';
 
-describe('AssignmentWorkspace Defensive Rendering Regression Tests', () => {
+describe('AssignmentWorkspace Final Assignment & Defensive Rendering Tests', () => {
   it('does NOT render literal undefined when title, description, or instructions are missing', () => {
     // Intentionally construct an assignment with missing/undefined properties
     const sparseAssignment: Assignment = {
@@ -32,36 +32,89 @@ describe('AssignmentWorkspace Defensive Rendering Regression Tests', () => {
     expect(screen.getByText('No task description provided.')).toBeInTheDocument();
   });
 
-  it('renders valid assignment content, brief, and instructions properly', () => {
-    const validAssignment: Assignment = {
-      id: 'assign-valid',
-      title: 'Advanced Financial Modeling Sensitivity',
-      description: 'Perform two-way sensitivity analysis on projected revenue.',
+  it('renders all final project fields: title, description, objectives, instructions, deliverables, rubric weights, and answerKey', () => {
+    // Exact structure matching the user's uploaded JSON finalProject specification
+    const finalAssignment: Assignment = {
+      id: 'assign-final-project',
+      title: 'Company Annual Sales Forecast & Dashboard Capstone',
+      description: 'Build an end-to-end multi-departmental forecasting and variance model.',
+      objectives: [
+        'Model multi-year revenue projections using dynamic arrays.',
+        'Implement automated variance analysis and KPI flags.',
+      ],
       instructions: [
-        'Open the starter workbook.',
-        'Apply the two-variable Data Table formula.',
-        'Document variance findings.',
+        'Import historical revenue tables.',
+        'Construct XLOOKUP models for department growth multipliers.',
+        'Format the executive presentation view.',
       ],
-      submissionType: 'spreadsheet',
+      deliverables: [
+        'Completed .xlsx financial workbook',
+        'Summary variance commentary note',
+      ],
+      submissionType: 'file',
+      evaluationMethod: 'rubric',
       rubric: [
-        { criteria: 'Formula Structure', points: 50, description: 'Correct formula references used.' },
+        { criteria: 'Formula Dynamic Structure', weight: '40%', points: 40, description: 'No hardcoded formula numbers' },
+        { criteria: 'Variance Integrity', weight: '30%', points: 30, description: 'Accurate variance percentages' },
+        { criteria: 'Executive Dashboard Aesthetics', weight: '30%', points: 30, description: 'Clean layout and visual hierarchy' },
       ],
-      answerKeyOrModelAnswer: 'Formula: =E14 linked to Table range B4:G10',
+      answerKeyOrModelAnswer: 'Standard model: =XLOOKUP(A4, DepartmentTiers[ID], DepartmentTiers[Rate]) linked to cells B2:G12.',
     };
 
-    render(
+    const existingSubmission = {
+      id: 'sub-1',
+      assignmentId: finalAssignment.id,
+      classId: 'class-1',
+      submissionType: 'file' as const,
+      fileName: 'final-budget-forecast.xlsx',
+      evaluationMethod: 'rubric' as const,
+      isEvaluated: true,
+      score: 95,
+      submittedAt: Date.now(),
+    };
+
+    const { container } = render(
       <AssignmentWorkspace
-        assignment={validAssignment}
+        assignment={finalAssignment}
         classId="class-1"
+        existingSubmission={existingSubmission}
         onSaveSubmission={vi.fn()}
         onBack={vi.fn()}
       />
     );
 
-    expect(screen.getByText('Advanced Financial Modeling Sensitivity')).toBeInTheDocument();
-    expect(screen.getByText('Perform two-way sensitivity analysis on projected revenue.')).toBeInTheDocument();
-    expect(screen.getByText('Open the starter workbook.')).toBeInTheDocument();
-    expect(screen.getByText('Apply the two-variable Data Table formula.')).toBeInTheDocument();
-    expect(screen.getByText('Document variance findings.')).toBeInTheDocument();
+    // 1. Title & Description
+    expect(screen.getByText('Company Annual Sales Forecast & Dashboard Capstone')).toBeInTheDocument();
+    expect(screen.getByText('Build an end-to-end multi-departmental forecasting and variance model.')).toBeInTheDocument();
+
+    // 2. Objectives
+    expect(screen.getByText('Project Objectives')).toBeInTheDocument();
+    expect(screen.getByText('Model multi-year revenue projections using dynamic arrays.')).toBeInTheDocument();
+    expect(screen.getByText('Implement automated variance analysis and KPI flags.')).toBeInTheDocument();
+
+    // 3. Instructions
+    expect(screen.getByText('Step-by-Step Instructions')).toBeInTheDocument();
+    expect(screen.getByText('Import historical revenue tables.')).toBeInTheDocument();
+    expect(screen.getByText('Construct XLOOKUP models for department growth multipliers.')).toBeInTheDocument();
+    expect(screen.getByText('Format the executive presentation view.')).toBeInTheDocument();
+
+    // 4. Deliverables
+    expect(screen.getByText('Required Deliverables')).toBeInTheDocument();
+    expect(screen.getByText('Completed .xlsx financial workbook')).toBeInTheDocument();
+    expect(screen.getByText('Summary variance commentary note')).toBeInTheDocument();
+
+    // 5. Rubric criteria and weights
+    expect(screen.getByText(/Formula Dynamic Structure/)).toBeInTheDocument();
+    expect(screen.getByText(/Weight: 40%/)).toBeInTheDocument();
+    expect(screen.getByText(/Variance Integrity/)).toBeInTheDocument();
+    const thirtyPercentBadges = screen.getAllByText(/Weight: 30%/);
+    expect(thirtyPercentBadges.length).toBe(2);
+
+    // 6. Answer Key (revealed after submission)
+    expect(screen.getByText(/Standard model: =XLOOKUP/)).toBeInTheDocument();
+
+    // 7. Verify no literal undefined or [object Object] anywhere in container
+    expect(container.innerHTML).not.toContain('undefined');
+    expect(container.innerHTML).not.toContain('[object Object]');
   });
 });
