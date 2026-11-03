@@ -1,10 +1,15 @@
-const CACHE_NAME = 'selesai-makan-cache-v1';
+const CACHE_NAME = 'selesai-makan-cache-v2';
+
+// Derive scope base dynamically from service worker script location
+const swUrl = new URL(self.location.href);
+const swBasePath = swUrl.pathname.replace(/\/sw\.js$/, '') || '';
+
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.svg',
-  '/offline.html'
+  swBasePath + '/',
+  swBasePath + '/index.html',
+  swBasePath + '/manifest.json',
+  swBasePath + '/favicon.svg',
+  swBasePath + '/offline.html'
 ];
 
 self.addEventListener('install', (event) => {
@@ -67,7 +72,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // Fallback for HTML navigation requests
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html') || caches.match('/offline.html');
+          return caches.match(swBasePath + '/index.html') || caches.match(swBasePath + '/offline.html') || caches.match('/index.html') || caches.match('/offline.html');
         }
       });
     })
