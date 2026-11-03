@@ -43,7 +43,13 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
   );
   const [feedback, setFeedback] = useState(existingSubmission?.feedback || '');
 
-  const evaluationMethod = assignment.evaluationMethod || (assignment.expectedAnswer ? 'automatic' : assignment.rubric && assignment.rubric.length > 0 ? 'rubric' : 'self_assessment');
+  const evaluationMethod =
+    assignment.evaluationMethod ||
+    (assignment.expectedAnswer
+      ? 'automatic'
+      : assignment.rubric && assignment.rubric.length > 0
+      ? 'rubric'
+      : 'self_assessment');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -173,6 +179,14 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
     return false;
   });
 
+  // Safely extract instruction list, filtering out any empty/undefined items
+  const instructionsList = Array.isArray(assignment.instructions)
+    ? assignment.instructions.filter((inst) => typeof inst === 'string' && inst.trim().length > 0)
+    : [];
+
+  const displayTitle = assignment.title || 'Practical Assignment';
+  const displayDescription = assignment.description || '';
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Top Header & Breadcrumb */}
@@ -183,10 +197,10 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
               Practical Assignment
             </span>
             <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
-              Format: {submissionType.toUpperCase()}
+              Format: {(submissionType || 'text').toUpperCase()}
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-stone-900 mt-1.5">{assignment.title}</h1>
+          <h1 className="text-2xl font-bold text-stone-900 mt-1.5">{displayTitle}</h1>
         </div>
 
         <button
@@ -207,19 +221,27 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
 
       {/* Brief & Instructions */}
       <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-stone-600">Task Brief & Objectives</h3>
-        <p className="text-sm text-stone-700 leading-relaxed">{assignment.description}</p>
-
-        <div className="border-t border-stone-100 pt-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600 mb-2">Step-by-Step Instructions</h4>
-          <ol className="list-decimal list-inside space-y-1.5 text-xs text-stone-700 leading-relaxed">
-            {assignment.instructions.map((inst, idx) => (
-              <li key={idx} className="pl-1">
-                {inst}
-              </li>
-            ))}
-          </ol>
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-stone-600">Task Brief & Objectives</h3>
+          {displayDescription ? (
+            <p className="text-sm text-stone-700 leading-relaxed mt-1.5">{displayDescription}</p>
+          ) : (
+            <p className="text-xs text-stone-400 italic mt-1.5">No task description provided.</p>
+          )}
         </div>
+
+        {instructionsList.length > 0 && (
+          <div className="border-t border-stone-100 pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600 mb-2">Step-by-Step Instructions</h4>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-stone-700 leading-relaxed">
+              {instructionsList.map((inst, idx) => (
+                <li key={idx} className="pl-1">
+                  {inst}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         {/* Downloadable templates / datasets */}
         {targetResources.length > 0 && (
