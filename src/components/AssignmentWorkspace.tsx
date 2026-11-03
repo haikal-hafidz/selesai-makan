@@ -186,6 +186,12 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
 
   const displayTitle = assignment.title || 'Practical Assignment';
   const displayDescription = assignment.description || '';
+  const objectivesList = Array.isArray(assignment.objectives)
+    ? assignment.objectives.filter((obj) => typeof obj === 'string' && obj.trim().length > 0)
+    : [];
+  const deliverablesList = Array.isArray(assignment.deliverables)
+    ? assignment.deliverables.filter((d) => typeof d === 'string' && d.trim().length > 0)
+    : [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -219,16 +225,29 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
         </div>
       )}
 
-      {/* Brief & Instructions */}
-      <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+      {/* Brief, Objectives, Instructions & Deliverables */}
+      <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-5">
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-stone-600">Task Brief & Objectives</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-stone-600">Task Brief</h3>
           {displayDescription ? (
             <p className="text-sm text-stone-700 leading-relaxed mt-1.5">{displayDescription}</p>
           ) : (
             <p className="text-xs text-stone-400 italic mt-1.5">No task description provided.</p>
           )}
         </div>
+
+        {objectivesList.length > 0 && (
+          <div className="border-t border-stone-100 pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-2">Project Objectives</h4>
+            <ul className="list-disc list-inside space-y-1.5 text-xs text-stone-700 leading-relaxed">
+              {objectivesList.map((obj, idx) => (
+                <li key={idx} className="pl-1">
+                  {obj}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {instructionsList.length > 0 && (
           <div className="border-t border-stone-100 pt-4">
@@ -240,6 +259,19 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
                 </li>
               ))}
             </ol>
+          </div>
+        )}
+
+        {deliverablesList.length > 0 && (
+          <div className="border-t border-stone-100 pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-2">Required Deliverables</h4>
+            <ul className="list-disc list-inside space-y-1.5 text-xs text-stone-700 leading-relaxed">
+              {deliverablesList.map((deliv, idx) => (
+                <li key={idx} className="pl-1">
+                  {deliv}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -396,12 +428,16 @@ export const AssignmentWorkspace: React.FC<AssignmentWorkspaceProps> = ({
                 {assignment.rubric.map((item, idx) => {
                   const maxPts = item.points || 10;
                   const currentScore = rubricScores[item.criteria] ?? 0;
+                  const weightDisplay = item.weight ? ` • Weight: ${item.weight}` : '';
 
                   return (
                     <div key={idx} className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="font-semibold text-xs text-stone-900">{item.criteria}</div>
+                          <div className="font-semibold text-xs text-stone-900">
+                            {item.criteria}
+                            <span className="text-stone-400 font-normal">{weightDisplay}</span>
+                          </div>
                           <p className="text-[11px] text-stone-500 mt-0.5">{item.description}</p>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">

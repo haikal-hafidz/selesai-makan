@@ -492,61 +492,119 @@ export async function importLearningPack(
     if (finalProject) {
       const projectChapterId = crypto.randomUUID();
       chapterOrderOffset++;
+      const projTitle = finalProject.title || 'Final Project';
+      const projDesc = finalProject.description || finalProject.brief || 'Culminating course project';
+
       await storage.saveChapter({
         id: projectChapterId,
         classId: targetClass.id,
-        title: `Final Project: ${finalProject.title}`,
-        description: 'Culminating course project',
+        title: `Final Project: ${projTitle}`,
+        description: projDesc,
         order: chapterOrderOffset,
       });
       createdChapterIds.push(projectChapterId);
 
-      let projContent = `# Final Project: ${finalProject.title}\n\n${finalProject.brief || 'Complete the capstone project according to the guidelines below.'}\n\n`;
-      if (finalProject.milestones && finalProject.milestones.length > 0) {
-        projContent += `### Project Milestones\n`;
-        finalProject.milestones.forEach((m, idx) => {
-          projContent += `${idx + 1}. ${m}\n`;
+      let projContent = `# Final Project: ${projTitle}\n\n${projDesc}\n\n`;
+
+      if (finalProject.objectives && finalProject.objectives.length > 0) {
+        projContent += `### Project Objectives\n`;
+        finalProject.objectives.forEach((obj) => {
+          projContent += `- ${obj}\n`;
         });
+        projContent += `\n`;
       }
-      if (finalProject.submissionGuidelines) {
-        projContent += `\n### Submission Guidelines\n${finalProject.submissionGuidelines}\n`;
-      }
-      if (finalProject.evaluationRubric && finalProject.evaluationRubric.length > 0) {
-        projContent += `\n### Evaluation Rubric\n`;
-        finalProject.evaluationRubric.forEach((r) => {
-          projContent += `- **${r.criteria}**: ${r.description}\n`;
+
+      const instructionsToUse =
+        (finalProject.instructions && finalProject.instructions.length > 0)
+          ? finalProject.instructions
+          : (finalProject.milestones && finalProject.milestones.length > 0)
+          ? finalProject.milestones
+          : [];
+
+      if (instructionsToUse.length > 0) {
+        projContent += `### Step-by-Step Instructions\n`;
+        instructionsToUse.forEach((inst, idx) => {
+          projContent += `${idx + 1}. ${inst}\n`;
         });
+        projContent += `\n`;
+      }
+
+      const deliverablesToUse =
+        (finalProject.deliverables && finalProject.deliverables.length > 0)
+          ? finalProject.deliverables
+          : finalProject.submissionGuidelines
+          ? [finalProject.submissionGuidelines]
+          : [];
+
+      if (deliverablesToUse.length > 0) {
+        projContent += `### Required Deliverables\n`;
+        deliverablesToUse.forEach((deliv) => {
+          projContent += `- ${deliv}\n`;
+        });
+        projContent += `\n`;
+      }
+
+      const rubricToUse = finalProject.rubric || finalProject.evaluationRubric || [];
+      if (rubricToUse.length > 0) {
+        projContent += `### Evaluation Rubric\n`;
+        rubricToUse.forEach((r) => {
+          const weightLabel = r.weight ? ` (${r.weight})` : r.points ? ` (${r.points} pts)` : '';
+          projContent += `- **${r.criteria}**${weightLabel}: ${r.description}\n`;
+        });
+        projContent += `\n`;
+      }
+
+      if (finalProject.answerKey) {
+        projContent += `> **Model Solution & Reference Guidance:**\n> ${finalProject.answerKey.replace(/\n/g, '\n> ')}\n\n`;
       }
 
       const projLessonId = crypto.randomUUID();
       totalLessons++;
       totalAssignments++;
 
+      const mappedRubric = rubricToUse.length > 0
+        ? rubricToUse.map((r) => {
+            let pts = r.points;
+            if (pts === undefined && r.weight) {
+              const numericWeight = typeof r.weight === 'number' ? r.weight : parseFloat(String(r.weight).replace('%', ''));
+              if (!isNaN(numericWeight)) {
+                pts = numericWeight;
+              }
+            }
+            if (pts === undefined) {
+              pts = Math.round(100 / rubricToUse.length);
+            }
+            return {
+              criteria: r.criteria,
+              weight: r.weight,
+              points: pts,
+              description: r.description,
+            };
+          })
+        : undefined;
+
       const projectAssignment: Assignment = {
         id: crypto.randomUUID(),
         classId: targetClass.id,
         lessonId: projLessonId,
-        title: finalProject.title || 'Final Capstone Project',
-        description: finalProject.brief || 'Culminating course project assessment.',
-        instructions: (finalProject.milestones && finalProject.milestones.length > 0)
-          ? finalProject.milestones
-          : ['Review the project brief and requirements.', 'Complete the deliverable according to the guidelines.', 'Submit your final output.'],
+        title: projTitle,
+        description: projDesc,
+        objectives: finalProject.objectives,
+        instructions: instructionsToUse.length > 0
+          ? instructionsToUse
+          : ['Review the project objectives and requirements.', 'Complete the deliverables according to the rubric.', 'Submit your final output.'],
+        deliverables: deliverablesToUse,
         submissionType: 'file',
-        evaluationMethod: (finalProject.evaluationRubric && finalProject.evaluationRubric.length > 0) ? 'rubric' : 'self_assessment',
-        rubric: (finalProject.evaluationRubric && finalProject.evaluationRubric.length > 0)
-          ? finalProject.evaluationRubric.map((r) => ({
-              criteria: r.criteria,
-              points: Math.round(100 / finalProject.evaluationRubric!.length),
-              description: r.description,
-            }))
-          : undefined,
+        evaluationMethod: mappedRubric ? 'rubric' : 'self_assessment',
+        rubric: mappedRubric,
+        answerKeyOrModelAnswer: finalProject.answerKey,
       };
 
       await storage.saveLesson({
         id: projLessonId,
         classId: targetClass.id,
         chapterId: projectChapterId,
-        title: `Project Brief & Rubric`,
+        title: `Project Brief & Workspace`,
         content: projContent.trim(),
         assignments: [projectAssignment],
         order: 1,

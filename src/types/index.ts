@@ -24,6 +24,7 @@ export interface Chapter {
 export interface AssignmentRubricItem {
   criteria: string;
   points?: number;
+  weight?: string | number;
   description: string;
 }
 
@@ -33,7 +34,9 @@ export interface Assignment {
   lessonId?: string;
   title: string;
   description: string;
+  objectives?: string[];
   instructions: string[];
+  deliverables?: string[];
   submissionType: 'text' | 'file' | 'spreadsheet' | 'code' | 'url' | 'none';
   evaluationMethod?: 'automatic' | 'rubric' | 'self_assessment' | 'manual_review';
   expectedAnswer?: string; // For deterministic automatic check
@@ -42,15 +45,25 @@ export interface Assignment {
   attachmentResourceNames?: string[];
 }
 
+export interface FinalProjectRubricItem {
+  criteria: string;
+  weight?: string | number;
+  points?: number;
+  description: string;
+}
+
 export interface FinalProject {
   title: string;
-  brief: string;
+  description?: string;
+  brief?: string;
+  objectives?: string[];
+  instructions?: string[];
   milestones?: string[];
+  deliverables?: string[];
   submissionGuidelines?: string;
-  evaluationRubric?: {
-    criteria: string;
-    description: string;
-  }[];
+  rubric?: FinalProjectRubricItem[];
+  evaluationRubric?: FinalProjectRubricItem[];
+  answerKey?: string;
 }
 
 export interface AssignmentSubmission {
@@ -182,13 +195,26 @@ export interface LearningPackAssignment {
 
 export interface LearningPackFinalProject {
   title: string;
-  brief: string;
+  description?: string;
+  brief?: string;
+  objectives?: string[];
+  instructions?: string[];
   milestones?: string[];
+  deliverables?: string[];
   submissionGuidelines?: string;
-  evaluationRubric?: {
+  rubric?: {
     criteria: string;
+    weight?: string | number;
+    points?: number;
     description: string;
   }[];
+  evaluationRubric?: {
+    criteria: string;
+    weight?: string | number;
+    points?: number;
+    description: string;
+  }[];
+  answerKey?: string;
 }
 
 export interface LearningPackLesson {
