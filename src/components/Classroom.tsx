@@ -171,6 +171,12 @@ export const Classroom: React.FC<ClassroomProps> = ({
           })
         : undefined;
 
+      const normalizedFpAnswerKey = typeof fp.answerKey === 'string'
+        ? fp.answerKey
+        : (fp.answerKey && typeof fp.answerKey === 'object' && typeof (fp.answerKey as { content?: unknown }).content === 'string')
+        ? (fp.answerKey as { content: string }).content
+        : undefined;
+
       allAssignments.push({
         id: `final-project-${learningClass.id}`,
         classId: learningClass.id,
@@ -182,7 +188,7 @@ export const Classroom: React.FC<ClassroomProps> = ({
         submissionType: 'file',
         evaluationMethod: rubric ? 'rubric' : 'self_assessment',
         rubric,
-        answerKeyOrModelAnswer: fp.answerKey,
+        answerKeyOrModelAnswer: normalizedFpAnswerKey,
       });
     }
   }

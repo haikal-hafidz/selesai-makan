@@ -52,6 +52,13 @@ export interface FinalProjectRubricItem {
   description: string;
 }
 
+export interface AnswerKeyObject {
+  type?: string;
+  content: string;
+}
+
+export type AnswerKeyType = string | AnswerKeyObject;
+
 export interface FinalProject {
   title: string;
   description?: string;
@@ -63,7 +70,7 @@ export interface FinalProject {
   submissionGuidelines?: string;
   rubric?: FinalProjectRubricItem[];
   evaluationRubric?: FinalProjectRubricItem[];
-  answerKey?: string;
+  answerKey?: AnswerKeyType;
 }
 
 export interface AssignmentSubmission {
@@ -189,7 +196,8 @@ export interface LearningPackAssignment {
     points?: number;
     description: string;
   }[];
-  answerKeyOrModelAnswer?: string;
+  answerKeyOrModelAnswer?: string | AnswerKeyObject;
+  answerKey?: AnswerKeyType;
   attachmentResourceNames?: string[];
 }
 
@@ -214,7 +222,7 @@ export interface LearningPackFinalProject {
     points?: number;
     description: string;
   }[];
-  answerKey?: string;
+  answerKey?: AnswerKeyType;
 }
 
 export interface LearningPackLesson {
