@@ -70,6 +70,13 @@ export const App: React.FC = () => {
     } finally {
       // Remove opening loading screen once initial database sync concludes
       setIsInitialLoading(false);
+      // Also remove immediate HTML shell loader if present
+      const preLoader = document.getElementById('app-pre-loader');
+      if (preLoader) {
+        preLoader.style.opacity = '0';
+        preLoader.style.transition = 'opacity 0.25s ease-out';
+        setTimeout(() => preLoader.remove(), 250);
+      }
     }
   };
 

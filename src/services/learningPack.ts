@@ -353,17 +353,22 @@ export async function importLearningPack(
         if (lessonAssignments.length > 0) {
           let assignmentsText = `\n\n### Practical Assignments & Tasks\n`;
           lessonAssignments.forEach((assign) => {
-            assignmentsText += `\n#### Assignment: ${assign.title}\n${assign.description}\n\n**Instructions:**\n`;
-            assign.instructions.forEach((inst, i) => {
-              assignmentsText += `${i + 1}. ${inst}\n`;
-            });
+            const aTitle = assign.title || 'Assignment Task';
+            const aDesc = assign.description ? `${assign.description}\n\n` : '';
+            assignmentsText += `\n#### Assignment: ${aTitle}\n${aDesc}`;
+            if (assign.instructions && assign.instructions.length > 0) {
+              assignmentsText += `**Instructions:**\n`;
+              assign.instructions.forEach((inst, i) => {
+                assignmentsText += `${i + 1}. ${inst}\n`;
+              });
+            }
             if (assign.submissionType && assign.submissionType !== 'none') {
               assignmentsText += `\n*Expected Submission Format: ${assign.submissionType.toUpperCase()}*\n`;
             }
             if (assign.rubric && assign.rubric.length > 0) {
               assignmentsText += `\n**Evaluation Rubric:**\n`;
               assign.rubric.forEach((r) => {
-                assignmentsText += `- **${r.criteria}**${r.points ? ` (${r.points} pts)` : ''}: ${r.description}\n`;
+                assignmentsText += `- **${r.criteria}**${r.points ? ` (${r.points} pts)` : ''}: ${r.description || ''}\n`;
               });
             }
             if (assign.answerKeyOrModelAnswer) {
@@ -437,10 +442,13 @@ export async function importLearningPack(
         totalAssignments++;
         const assignLessonId = crypto.randomUUID();
 
-        let assignContent = `# ${ca.title}\n\n${ca.description}\n\n### Instructions\n`;
-        ca.instructions.forEach((inst, idx) => {
-          assignContent += `${idx + 1}. ${inst}\n`;
-        });
+        let assignContent = `# ${ca.title || 'Course Assignment'}\n\n${ca.description || ''}\n\n`;
+        if (ca.instructions && ca.instructions.length > 0) {
+          assignContent += `### Instructions\n`;
+          ca.instructions.forEach((inst, idx) => {
+            assignContent += `${idx + 1}. ${inst}\n`;
+          });
+        }
         if (ca.rubric && ca.rubric.length > 0) {
           assignContent += `\n### Evaluation Rubric\n`;
           ca.rubric.forEach((r) => {
@@ -451,12 +459,27 @@ export async function importLearningPack(
           assignContent += `\n> **Evaluation Model Guide:**\n> ${ca.answerKeyOrModelAnswer.replace(/\n/g, '\n> ')}\n`;
         }
 
+        const classAssignment: Assignment = {
+          id: crypto.randomUUID(),
+          classId: targetClass.id,
+          lessonId: assignLessonId,
+          title: ca.title || `Assignment ${i + 1}`,
+          description: ca.description || '',
+          instructions: ca.instructions || [],
+          submissionType: ca.submissionType || 'text',
+          evaluationMethod: ca.evaluationMethod || (ca.rubric && ca.rubric.length > 0 ? 'rubric' : 'self_assessment'),
+          rubric: ca.rubric,
+          answerKeyOrModelAnswer: ca.answerKeyOrModelAnswer,
+          attachmentResourceNames: ca.attachmentResourceNames,
+        };
+
         await storage.saveLesson({
           id: assignLessonId,
           classId: targetClass.id,
           chapterId: capstoneChapterId,
-          title: ca.title,
+          title: ca.title || `Assignment ${i + 1}`,
           content: assignContent.trim(),
+          assignments: [classAssignment],
           order: i + 1,
           isCompleted: false,
           updatedAt: Date.now(),
@@ -478,7 +501,7 @@ export async function importLearningPack(
       });
       createdChapterIds.push(projectChapterId);
 
-      let projContent = `# Final Project: ${finalProject.title}\n\n${finalProject.brief}\n\n`;
+      let projContent = `# Final Project: ${finalProject.title}\n\n${finalProject.brief || 'Complete the capstone project according to the guidelines below.'}\n\n`;
       if (finalProject.milestones && finalProject.milestones.length > 0) {
         projContent += `### Project Milestones\n`;
         finalProject.milestones.forEach((m, idx) => {
@@ -497,12 +520,35 @@ export async function importLearningPack(
 
       const projLessonId = crypto.randomUUID();
       totalLessons++;
+      totalAssignments++;
+
+      const projectAssignment: Assignment = {
+        id: crypto.randomUUID(),
+        classId: targetClass.id,
+        lessonId: projLessonId,
+        title: finalProject.title || 'Final Capstone Project',
+        description: finalProject.brief || 'Culminating course project assessment.',
+        instructions: (finalProject.milestones && finalProject.milestones.length > 0)
+          ? finalProject.milestones
+          : ['Review the project brief and requirements.', 'Complete the deliverable according to the guidelines.', 'Submit your final output.'],
+        submissionType: 'file',
+        evaluationMethod: (finalProject.evaluationRubric && finalProject.evaluationRubric.length > 0) ? 'rubric' : 'self_assessment',
+        rubric: (finalProject.evaluationRubric && finalProject.evaluationRubric.length > 0)
+          ? finalProject.evaluationRubric.map((r) => ({
+              criteria: r.criteria,
+              points: Math.round(100 / finalProject.evaluationRubric!.length),
+              description: r.description,
+            }))
+          : undefined,
+      };
+
       await storage.saveLesson({
         id: projLessonId,
         classId: targetClass.id,
         chapterId: projectChapterId,
         title: `Project Brief & Rubric`,
         content: projContent.trim(),
+        assignments: [projectAssignment],
         order: 1,
         isCompleted: false,
         updatedAt: Date.now(),

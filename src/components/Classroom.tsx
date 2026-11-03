@@ -111,19 +111,48 @@ export const Classroom: React.FC<ClassroomProps> = ({
   const completedLessons = lessons.filter((l) => l.isCompleted).length;
   const progressPercent = totalLessons === 0 ? 0 : Math.round((completedLessons / totalLessons) * 100);
 
-  // Collect all assignments across lessons
+  // Collect all assignments across lessons, plus class-level final project if present
   const allAssignments: Assignment[] = [];
   lessons.forEach((l) => {
     if (l.assignments && Array.isArray(l.assignments)) {
       l.assignments.forEach((a) => {
         allAssignments.push({
           ...a,
+          title: a.title || l.title || 'Assignment',
+          description: a.description || '',
+          instructions: Array.isArray(a.instructions) ? a.instructions : [],
+          submissionType: a.submissionType || 'text',
           lessonId: l.id,
           classId: learningClass.id,
         });
       });
     }
   });
+
+  // If class has a final project, ensure it's also available as an assignment in Practice if not already in allAssignments
+  if (learningClass.finalProject) {
+    const hasFinalProjectAssignment = allAssignments.some((a) => a.title === learningClass.finalProject!.title);
+    if (!hasFinalProjectAssignment) {
+      allAssignments.push({
+        id: `final-project-${learningClass.id}`,
+        classId: learningClass.id,
+        title: learningClass.finalProject.title || 'Final Capstone Project',
+        description: learningClass.finalProject.brief || 'Course culminating final project.',
+        instructions: (learningClass.finalProject.milestones && learningClass.finalProject.milestones.length > 0)
+          ? learningClass.finalProject.milestones
+          : ['Review the final project brief and guidelines.', 'Complete the deliverable.', 'Submit your final output.'],
+        submissionType: 'file',
+        evaluationMethod: (learningClass.finalProject.evaluationRubric && learningClass.finalProject.evaluationRubric.length > 0) ? 'rubric' : 'self_assessment',
+        rubric: (learningClass.finalProject.evaluationRubric && learningClass.finalProject.evaluationRubric.length > 0)
+          ? learningClass.finalProject.evaluationRubric.map((r) => ({
+              criteria: r.criteria,
+              points: Math.round(100 / learningClass.finalProject!.evaluationRubric!.length),
+              description: r.description,
+            }))
+          : undefined,
+      });
+    }
+  }
 
   // Current lesson assignments & resources
   const lessonResources = activeLesson
