@@ -7,10 +7,21 @@ import {
   QuizAttempt,
   AssignmentSubmission,
   BackupPayload,
+  Note,
+  Highlight,
+  FlashcardDeck,
+  Flashcard,
+  Skill,
+  LearningPath,
+  CalendarEvent,
+  LearningGoal,
+  Achievement,
+  PortfolioProject,
+  StudySession,
 } from '../types';
 
 const DB_NAME = 'selesai_makan_db';
-const DB_VERSION = 3; // Version 3: Adds assignment_submissions store
+const DB_VERSION = 4; // Version 4: Ecosystem stores (notes, highlights, flashcards, skills, paths, calendar, goals, achievements, portfolio, sessions)
 
 export class StorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -62,11 +73,73 @@ export class StorageService {
           store.createIndex('classId', 'classId', { unique: false });
         }
 
-        // New in DB_VERSION 3
         if (!db.objectStoreNames.contains('assignment_submissions')) {
           const store = db.createObjectStore('assignment_submissions', { keyPath: 'id' });
           store.createIndex('assignmentId', 'assignmentId', { unique: false });
           store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        // New stores in DB_VERSION 4
+        if (!db.objectStoreNames.contains('notes')) {
+          const store = db.createObjectStore('notes', { keyPath: 'id' });
+          store.createIndex('classId', 'classId', { unique: false });
+          store.createIndex('lessonId', 'lessonId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('highlights')) {
+          const store = db.createObjectStore('highlights', { keyPath: 'id' });
+          store.createIndex('lessonId', 'lessonId', { unique: false });
+          store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('flashcard_decks')) {
+          const store = db.createObjectStore('flashcard_decks', { keyPath: 'id' });
+          store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('flashcards')) {
+          const store = db.createObjectStore('flashcards', { keyPath: 'id' });
+          store.createIndex('deckId', 'deckId', { unique: false });
+          store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('skills')) {
+          const store = db.createObjectStore('skills', { keyPath: 'id' });
+          store.createIndex('category', 'category', { unique: false });
+          store.createIndex('level', 'level', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learning_paths')) {
+          const store = db.createObjectStore('learning_paths', { keyPath: 'id' });
+          store.createIndex('category', 'category', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('calendar_events')) {
+          const store = db.createObjectStore('calendar_events', { keyPath: 'id' });
+          store.createIndex('date', 'date', { unique: false });
+          store.createIndex('classId', 'classId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('learning_goals')) {
+          const store = db.createObjectStore('learning_goals', { keyPath: 'id' });
+          store.createIndex('period', 'period', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('achievements')) {
+          const store = db.createObjectStore('achievements', { keyPath: 'id' });
+          store.createIndex('key', 'key', { unique: true });
+        }
+
+        if (!db.objectStoreNames.contains('portfolio_projects')) {
+          const store = db.createObjectStore('portfolio_projects', { keyPath: 'id' });
+          store.createIndex('category', 'category', { unique: false });
+          store.createIndex('status', 'status', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('study_sessions')) {
+          const store = db.createObjectStore('study_sessions', { keyPath: 'id' });
+          store.createIndex('classId', 'classId', { unique: false });
+          store.createIndex('timestamp', 'timestamp', { unique: false });
         }
       };
 
@@ -172,9 +245,12 @@ export class StorageService {
   }
 
   // Lessons
-  async getLessons(classId: string): Promise<Lesson[]> {
+  async getLessons(classId?: string): Promise<Lesson[]> {
     const all = await this.getAll<Lesson>('lessons');
-    return all.filter((l) => l.classId === classId).sort((a, b) => a.order - b.order);
+    if (classId) {
+      return all.filter((l) => l.classId === classId).sort((a, b) => a.order - b.order);
+    }
+    return all.sort((a, b) => a.order - b.order);
   }
 
   async getLesson(id: string): Promise<Lesson | undefined> {
@@ -254,6 +330,195 @@ export class StorageService {
     return this.delete('assignment_submissions', id);
   }
 
+  // Notes
+  async getNotes(classId?: string): Promise<Note[]> {
+    const all = await this.getAll<Note>('notes');
+    if (classId) {
+      return all.filter((n) => n.classId === classId).sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+    return all.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async getNote(id: string): Promise<Note | undefined> {
+    return this.getById<Note>('notes', id);
+  }
+
+  async saveNote(note: Note): Promise<Note> {
+    return this.put<Note>('notes', note);
+  }
+
+  async deleteNote(id: string): Promise<void> {
+    return this.delete('notes', id);
+  }
+
+  // Highlights
+  async getHighlights(lessonId: string): Promise<Highlight[]> {
+    const all = await this.getAll<Highlight>('highlights');
+    return all.filter((h) => h.lessonId === lessonId).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async saveHighlight(highlight: Highlight): Promise<Highlight> {
+    return this.put<Highlight>('highlights', highlight);
+  }
+
+  async deleteHighlight(id: string): Promise<void> {
+    return this.delete('highlights', id);
+  }
+
+  // Flashcard Decks & Flashcards
+  async getFlashcardDecks(classId?: string): Promise<FlashcardDeck[]> {
+    const all = await this.getAll<FlashcardDeck>('flashcard_decks');
+    if (classId) {
+      return all.filter((d) => d.classId === classId).sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+    return all.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async saveFlashcardDeck(deck: FlashcardDeck): Promise<FlashcardDeck> {
+    return this.put<FlashcardDeck>('flashcard_decks', deck);
+  }
+
+  async deleteFlashcardDeck(id: string): Promise<void> {
+    const allCards = await this.getAll<Flashcard>('flashcards');
+    const deckCards = allCards.filter((c) => c.deckId === id);
+    for (const card of deckCards) {
+      await this.delete('flashcards', card.id);
+    }
+    return this.delete('flashcard_decks', id);
+  }
+
+  async getFlashcards(deckId?: string): Promise<Flashcard[]> {
+    const all = await this.getAll<Flashcard>('flashcards');
+    if (deckId) {
+      return all.filter((c) => c.deckId === deckId).sort((a, b) => a.schedule.nextReviewAt - b.schedule.nextReviewAt);
+    }
+    return all.sort((a, b) => a.schedule.nextReviewAt - b.schedule.nextReviewAt);
+  }
+
+  async getDueFlashcards(): Promise<Flashcard[]> {
+    const now = Date.now();
+    const all = await this.getAll<Flashcard>('flashcards');
+    return all.filter((c) => c.schedule.nextReviewAt <= now);
+  }
+
+  async saveFlashcard(card: Flashcard): Promise<Flashcard> {
+    return this.put<Flashcard>('flashcards', card);
+  }
+
+  async deleteFlashcard(id: string): Promise<void> {
+    return this.delete('flashcards', id);
+  }
+
+  // Skills
+  async getSkills(): Promise<Skill[]> {
+    const all = await this.getAll<Skill>('skills');
+    return all.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getSkill(id: string): Promise<Skill | undefined> {
+    return this.getById<Skill>('skills', id);
+  }
+
+  async saveSkill(skill: Skill): Promise<Skill> {
+    return this.put<Skill>('skills', skill);
+  }
+
+  async deleteSkill(id: string): Promise<void> {
+    return this.delete('skills', id);
+  }
+
+  // Learning Paths
+  async getLearningPaths(): Promise<LearningPath[]> {
+    const all = await this.getAll<LearningPath>('learning_paths');
+    return all.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async getLearningPath(id: string): Promise<LearningPath | undefined> {
+    return this.getById<LearningPath>('learning_paths', id);
+  }
+
+  async saveLearningPath(path: LearningPath): Promise<LearningPath> {
+    return this.put<LearningPath>('learning_paths', path);
+  }
+
+  async deleteLearningPath(id: string): Promise<void> {
+    return this.delete('learning_paths', id);
+  }
+
+  // Calendar Events
+  async getCalendarEvents(startDate?: string, endDate?: string): Promise<CalendarEvent[]> {
+    const all = await this.getAll<CalendarEvent>('calendar_events');
+    if (startDate && endDate) {
+      return all
+        .filter((e) => e.date >= startDate && e.date <= endDate)
+        .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+    }
+    return all.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async saveCalendarEvent(event: CalendarEvent): Promise<CalendarEvent> {
+    return this.put<CalendarEvent>('calendar_events', event);
+  }
+
+  async deleteCalendarEvent(id: string): Promise<void> {
+    return this.delete('calendar_events', id);
+  }
+
+  // Learning Goals
+  async getLearningGoals(): Promise<LearningGoal[]> {
+    const all = await this.getAll<LearningGoal>('learning_goals');
+    return all.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async saveLearningGoal(goal: LearningGoal): Promise<LearningGoal> {
+    return this.put<LearningGoal>('learning_goals', goal);
+  }
+
+  async deleteLearningGoal(id: string): Promise<void> {
+    return this.delete('learning_goals', id);
+  }
+
+  // Achievements
+  async getAchievements(): Promise<Achievement[]> {
+    const all = await this.getAll<Achievement>('achievements');
+    return all;
+  }
+
+  async saveAchievement(achievement: Achievement): Promise<Achievement> {
+    return this.put<Achievement>('achievements', achievement);
+  }
+
+  // Portfolio Projects
+  async getPortfolioProjects(): Promise<PortfolioProject[]> {
+    const all = await this.getAll<PortfolioProject>('portfolio_projects');
+    return all.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async getPortfolioProject(id: string): Promise<PortfolioProject | undefined> {
+    return this.getById<PortfolioProject>('portfolio_projects', id);
+  }
+
+  async savePortfolioProject(project: PortfolioProject): Promise<PortfolioProject> {
+    return this.put<PortfolioProject>('portfolio_projects', project);
+  }
+
+  async deletePortfolioProject(id: string): Promise<void> {
+    return this.delete('portfolio_projects', id);
+  }
+
+  // Study Sessions
+  async getStudySessions(classId?: string): Promise<StudySession[]> {
+    const all = await this.getAll<StudySession>('study_sessions');
+    if (classId) {
+      return all.filter((s) => s.classId === classId).sort((a, b) => b.timestamp - a.timestamp);
+    }
+    return all.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  async saveStudySession(session: StudySession): Promise<StudySession> {
+    return this.put<StudySession>('study_sessions', session);
+  }
+
   // Backup and Restore
   async exportBackup(): Promise<string> {
     const classes = await this.getAll<LearningClass>('classes');
@@ -323,8 +588,34 @@ export class StorageService {
       })
     );
 
+    const [
+      notes,
+      highlights,
+      flashcardDecks,
+      flashcards,
+      skills,
+      learningPaths,
+      calendarEvents,
+      learningGoals,
+      achievements,
+      portfolioProjects,
+      studySessions,
+    ] = await Promise.all([
+      this.getAll<Note>('notes'),
+      this.getAll<Highlight>('highlights'),
+      this.getAll<FlashcardDeck>('flashcard_decks'),
+      this.getAll<Flashcard>('flashcards'),
+      this.getAll<Skill>('skills'),
+      this.getAll<LearningPath>('learning_paths'),
+      this.getAll<CalendarEvent>('calendar_events'),
+      this.getAll<LearningGoal>('learning_goals'),
+      this.getAll<Achievement>('achievements'),
+      this.getAll<PortfolioProject>('portfolio_projects'),
+      this.getAll<StudySession>('study_sessions'),
+    ]);
+
     const payload: BackupPayload = {
-      version: 1,
+      version: 2,
       exportedAt: Date.now(),
       classes,
       chapters,
@@ -333,6 +624,17 @@ export class StorageService {
       quizzes,
       attempts,
       submissions: submissionsWithUrl,
+      notes,
+      highlights,
+      flashcardDecks,
+      flashcards,
+      skills,
+      learningPaths,
+      calendarEvents,
+      learningGoals,
+      achievements,
+      portfolioProjects,
+      studySessions,
     };
 
     return JSON.stringify(payload, null, 2);
@@ -389,6 +691,39 @@ export class StorageService {
         fileBlob,
       });
     }
+    for (const n of payload.notes || []) {
+      await this.saveNote(n);
+    }
+    for (const h of payload.highlights || []) {
+      await this.saveHighlight(h);
+    }
+    for (const d of payload.flashcardDecks || []) {
+      await this.saveFlashcardDeck(d);
+    }
+    for (const f of payload.flashcards || []) {
+      await this.saveFlashcard(f);
+    }
+    for (const sk of payload.skills || []) {
+      await this.saveSkill(sk);
+    }
+    for (const p of payload.learningPaths || []) {
+      await this.saveLearningPath(p);
+    }
+    for (const ev of payload.calendarEvents || []) {
+      await this.saveCalendarEvent(ev);
+    }
+    for (const g of payload.learningGoals || []) {
+      await this.saveLearningGoal(g);
+    }
+    for (const ac of payload.achievements || []) {
+      await this.saveAchievement(ac);
+    }
+    for (const proj of payload.portfolioProjects || []) {
+      await this.savePortfolioProject(proj);
+    }
+    for (const ss of payload.studySessions || []) {
+      await this.saveStudySession(ss);
+    }
   }
 
   // Clear all data
@@ -402,6 +737,17 @@ export class StorageService {
       'quizzes',
       'quiz_attempts',
       'assignment_submissions',
+      'notes',
+      'highlights',
+      'flashcard_decks',
+      'flashcards',
+      'skills',
+      'learning_paths',
+      'calendar_events',
+      'learning_goals',
+      'achievements',
+      'portfolio_projects',
+      'study_sessions',
     ];
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeNames, 'readwrite');

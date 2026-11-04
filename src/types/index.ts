@@ -155,6 +155,193 @@ export interface QuizAttempt {
   takenAt: number;
 }
 
+// -------------------------------------------------------------
+// Ecosystem Domain Entities (Personal LMS)
+// -------------------------------------------------------------
+
+export interface Note {
+  id: string;
+  classId?: string;
+  lessonId?: string;
+  title: string;
+  content: string; // Markdown
+  tags: string[];
+  isPinned: boolean;
+  isFavorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Highlight {
+  id: string;
+  classId: string;
+  lessonId: string;
+  text: string;
+  note?: string;
+  color?: string; // Yellow, green, blue, etc.
+  createdAt: number;
+}
+
+export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
+
+export interface SpacedRepetitionSchedule {
+  intervalDays: number;
+  easeFactor: number;
+  repetitions: number;
+  lapses: number;
+  lastReviewedAt?: number;
+  nextReviewAt: number;
+}
+
+export interface Flashcard {
+  id: string;
+  deckId: string;
+  classId?: string;
+  lessonId?: string;
+  front: string;
+  back: string;
+  explanation?: string;
+  example?: string;
+  tags: string[];
+  schedule: SpacedRepetitionSchedule;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FlashcardDeck {
+  id: string;
+  title: string;
+  description: string;
+  classId?: string;
+  tags: string[];
+  color?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type SkillLevel = 'not_started' | 'learning' | 'practicing' | 'demonstrated' | 'mastered';
+
+export interface SkillEvidence {
+  id: string;
+  title: string;
+  type: 'assignment' | 'project' | 'workbook' | 'reflection' | 'external';
+  referenceId?: string; // Assignment ID, submission ID, or project ID
+  notes?: string;
+  attachedAt: number;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  level: SkillLevel;
+  proficiencyCriteria: string[];
+  relatedClassIds: string[];
+  relatedAssignmentIds?: string[];
+  evidence: SkillEvidence[];
+  lastDemonstratedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PathStep {
+  classId: string;
+  order: number;
+  prerequisites?: string[]; // IDs of preceding classes in path
+  milestoneTitle?: string;
+}
+
+export interface LearningPath {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  objectives: string[];
+  steps: PathStep[];
+  capstoneTitle?: string;
+  capstoneDescription?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type CalendarEventType =
+  | 'study_session'
+  | 'course_milestone'
+  | 'assignment_deadline'
+  | 'flashcard_review'
+  | 'quiz'
+  | 'project_milestone';
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: CalendarEventType;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  durationMinutes?: number;
+  classId?: string;
+  assignmentId?: string;
+  isCompleted: boolean;
+  notes?: string;
+  createdAt: number;
+}
+
+export interface LearningGoal {
+  id: string;
+  title: string;
+  period: 'daily' | 'weekly' | 'monthly' | 'custom';
+  targetMinutes: number;
+  targetItems?: number; // e.g. lessons or cards
+  completedMinutes: number;
+  completedItems?: number;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  isArchived: boolean;
+  createdAt: number;
+}
+
+export interface Achievement {
+  id: string;
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: 'curriculum' | 'assessment' | 'practice' | 'consistency' | 'mastery';
+  unlockedAt?: number;
+  progressCurrent: number;
+  progressTarget: number;
+}
+
+export type ProjectStatus = 'draft' | 'in_progress' | 'completed' | 'archived';
+
+export interface PortfolioProject {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  skillsDemonstrated: string[];
+  classId?: string;
+  assignmentId?: string;
+  status: ProjectStatus;
+  keyOutcomes: string[];
+  reflection?: string;
+  resourceIds?: string[];
+  completedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface StudySession {
+  id: string;
+  classId?: string;
+  lessonId?: string;
+  activityType: 'reading' | 'quiz' | 'practice' | 'flashcards' | 'project';
+  durationMinutes: number;
+  timestamp: number;
+  notes?: string;
+}
+
 export interface BackupPayload {
   version: number;
   exportedAt: number;
@@ -165,6 +352,17 @@ export interface BackupPayload {
   quizzes: Quiz[];
   attempts: QuizAttempt[];
   submissions?: Omit<AssignmentSubmission, 'fileBlob'>[];
+  notes?: Note[];
+  highlights?: Highlight[];
+  flashcardDecks?: FlashcardDeck[];
+  flashcards?: Flashcard[];
+  skills?: Skill[];
+  learningPaths?: LearningPath[];
+  calendarEvents?: CalendarEvent[];
+  learningGoals?: LearningGoal[];
+  achievements?: Achievement[];
+  portfolioProjects?: PortfolioProject[];
+  studySessions?: StudySession[];
 }
 
 // -------------------------------------------------------------

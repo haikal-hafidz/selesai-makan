@@ -9,6 +9,14 @@ import {
   Edit,
   ArrowRight,
   FileCode,
+  LayoutDashboard,
+  Compass,
+  FileText,
+  Brain,
+  Layers,
+  Calendar,
+  FolderGit2,
+  TrendingUp,
 } from 'lucide-react';
 import {
   LearningClass,
@@ -18,19 +26,55 @@ import {
   QuizAttempt,
   ResourceItem,
   AssignmentSubmission,
+  Note,
+  FlashcardDeck,
+  Flashcard,
+  Skill,
+  LearningPath,
+  CalendarEvent,
+  LearningGoal,
+  Achievement,
+  PortfolioProject,
 } from './types';
 import { storage } from './services/storage';
 import { preferencesService, UserPreferences } from './services/preferences';
 import { extractResourceContent } from './services/resourceExtractor';
+import { analyticsService, AnalyticsSummary } from './services/analyticsService';
+import { achievementService } from './services/achievementService';
+
 import { ClassModal } from './components/ClassModal';
 import { Classroom } from './components/Classroom';
 import { BackupSettings } from './components/BackupSettings';
 import { LearningPackImportModal } from './components/LearningPackImportModal';
 import { LoadingScreen } from './components/LoadingScreen';
 import { OfflineStatusIndicator } from './components/OfflineStatusIndicator';
+import { PersonalDashboard } from './components/PersonalDashboard';
+import { NotebookView } from './components/NotebookView';
+import { FlashcardsView } from './components/FlashcardsView';
+import { SkillsTrackerView } from './components/SkillsTrackerView';
+import { LearningPathsView } from './components/LearningPathsView';
+import { CalendarGoalsView } from './components/CalendarGoalsView';
+import { PortfolioView } from './components/PortfolioView';
+import { AnalyticsView } from './components/AnalyticsView';
+import { GlobalSearchModal } from './components/GlobalSearchModal';
+
+export type MainNavigationTab =
+  | 'dashboard'
+  | 'classes'
+  | 'paths'
+  | 'notebook'
+  | 'flashcards'
+  | 'resources'
+  | 'skills'
+  | 'calendar'
+  | 'portfolio'
+  | 'analytics'
+  | 'settings';
 
 export const App: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+
+  // Core LMS data
   const [classes, setClasses] = useState<LearningClass[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -39,38 +83,80 @@ export const App: React.FC = () => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
 
-  const [preferences] = useState<UserPreferences>(() =>
-    preferencesService.getPreferences()
-  );
+  // Ecosystem data
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
 
+  const [preferences] = useState<UserPreferences>(() => preferencesService.getPreferences());
+
+  const [activeTab, setActiveTab] = useState<MainNavigationTab>('dashboard');
   const [activeClassId, setActiveClassId] = useState<string | null>(
     preferences.selectedClassId || null
   );
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(
     preferences.selectedLessonId
   );
-  const [currentView, setCurrentView] = useState<'classes' | 'settings'>(
-    preferences.activeView === 'settings' ? 'settings' : 'classes'
-  );
 
   // Modals & search
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [isPackImportModalOpen, setIsPackImportModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<LearningClass | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [classCatalogSearch, setClassCatalogSearch] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('All');
 
   // Load all initial data from IndexedDB
   const refreshData = async () => {
     try {
-      const cls = await storage.getClasses();
+      const [
+        cls,
+        nts,
+        decks,
+        cards,
+        sks,
+        paths,
+        events,
+        goals,
+        projs,
+        ach,
+        anl,
+      ] = await Promise.all([
+        storage.getClasses(),
+        storage.getNotes(),
+        storage.getFlashcardDecks(),
+        storage.getFlashcards(),
+        storage.getSkills(),
+        storage.getLearningPaths(),
+        storage.getCalendarEvents(),
+        storage.getLearningGoals(),
+        storage.getPortfolioProjects(),
+        achievementService.evaluateAchievements(),
+        analyticsService.getSummary(),
+      ]);
+
       setClasses(cls);
+      setNotes(nts);
+      setFlashcardDecks(decks);
+      setFlashcards(cards);
+      setSkills(sks);
+      setLearningPaths(paths);
+      setCalendarEvents(events);
+      setLearningGoals(goals);
+      setPortfolioProjects(projs);
+      setAchievements(ach);
+      setAnalytics(anl);
     } catch (err) {
       console.error('Failed to load data from IndexedDB:', err);
     } finally {
-      // Remove opening loading screen once initial database sync concludes
       setIsInitialLoading(false);
-      // Also remove immediate HTML shell loader if present
       const preLoader = document.getElementById('app-pre-loader');
       if (preLoader) {
         preLoader.style.opacity = '0';
@@ -82,7 +168,6 @@ export const App: React.FC = () => {
 
   const reloadSubCollections = async () => {
     try {
-
       if (activeClassId) {
         const [ch, ls, qz, att, res, subs] = await Promise.all([
           storage.getChapters(activeClassId),
@@ -117,9 +202,9 @@ export const App: React.FC = () => {
     preferencesService.savePreferences({
       selectedClassId: activeClassId || undefined,
       selectedLessonId: activeLessonId || undefined,
-      activeView: currentView === 'settings' ? 'settings' : 'classes',
+      activeView: activeTab === 'settings' ? 'settings' : 'classes',
     });
-  }, [activeClassId, activeLessonId, currentView]);
+  }, [activeClassId, activeLessonId, activeTab]);
 
   // Class Actions
   const handleSaveClass = async (
@@ -166,12 +251,12 @@ export const App: React.FC = () => {
       order: chapters.length + 1,
     };
     await storage.saveChapter(newChapter);
-    await refreshData();
+    await reloadSubCollections();
   };
 
   const handleDeleteChapter = async (chapterId: string) => {
     await storage.deleteChapter(chapterId);
-    await refreshData();
+    await reloadSubCollections();
   };
 
   // Lesson Actions
@@ -190,11 +275,13 @@ export const App: React.FC = () => {
     };
     await storage.saveLesson(newLesson);
     setActiveLessonId(newLesson.id);
+    await reloadSubCollections();
     await refreshData();
   };
 
   const handleSaveLesson = async (lesson: Lesson) => {
     await storage.saveLesson(lesson);
+    await reloadSubCollections();
     await refreshData();
   };
 
@@ -203,6 +290,7 @@ export const App: React.FC = () => {
     if (activeLessonId === lessonId) {
       setActiveLessonId(undefined);
     }
+    await reloadSubCollections();
     await refreshData();
   };
 
@@ -216,36 +304,39 @@ export const App: React.FC = () => {
       updatedAt: Date.now(),
     };
     await storage.saveLesson(updated);
+    await reloadSubCollections();
     await refreshData();
   };
 
   // Quiz Actions
   const handleSaveQuiz = async (quiz: Quiz) => {
     await storage.saveQuiz(quiz);
+    await reloadSubCollections();
     await refreshData();
   };
 
   const handleDeleteQuiz = async (id: string) => {
     await storage.deleteQuiz(id);
+    await reloadSubCollections();
     await refreshData();
   };
 
   const handleRecordAttempt = async (attempt: QuizAttempt) => {
     await storage.saveQuizAttempt(attempt);
+    await reloadSubCollections();
     await refreshData();
   };
 
   // Assignment Submission Action
   const handleSaveSubmission = async (submission: AssignmentSubmission) => {
     await storage.saveSubmission(submission);
+    await reloadSubCollections();
     await refreshData();
   };
 
-  // Universal Resource Actions (Content extraction enabled)
+  // Resource Actions
   const handleUploadResource = async (file: File, chapterId?: string, lessonId?: string) => {
     if (!activeClassId) return;
-
-    // Process & extract readable text client-side where possible
     const extracted = await extractResourceContent(file);
 
     const resource: ResourceItem = {
@@ -264,41 +355,126 @@ export const App: React.FC = () => {
     };
 
     await storage.saveResource(resource);
+    await reloadSubCollections();
     await refreshData();
   };
 
   const handleDeleteResource = async (id: string) => {
     await storage.deleteResource(id);
+    await reloadSubCollections();
+    await refreshData();
+  };
+
+  // Ecosystem Handlers
+  const handleSaveNote = async (note: Note) => {
+    await storage.saveNote(note);
+    await refreshData();
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    await storage.deleteNote(noteId);
+    await refreshData();
+  };
+
+  const handleSaveDeck = async (deck: FlashcardDeck) => {
+    await storage.saveFlashcardDeck(deck);
+    await refreshData();
+  };
+
+  const handleDeleteDeck = async (deckId: string) => {
+    await storage.deleteFlashcardDeck(deckId);
+    await refreshData();
+  };
+
+  const handleSaveCard = async (card: Flashcard) => {
+    await storage.saveFlashcard(card);
+    await refreshData();
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    await storage.deleteFlashcard(cardId);
+    await refreshData();
+  };
+
+  const handleSaveSkill = async (skill: Skill) => {
+    await storage.saveSkill(skill);
+    await refreshData();
+  };
+
+  const handleDeleteSkill = async (skillId: string) => {
+    await storage.deleteSkill(skillId);
+    await refreshData();
+  };
+
+  const handleSaveLearningPath = async (path: LearningPath) => {
+    await storage.saveLearningPath(path);
+    await refreshData();
+  };
+
+  const handleDeleteLearningPath = async (pathId: string) => {
+    await storage.deleteLearningPath(pathId);
+    await refreshData();
+  };
+
+  const handleSaveCalendarEvent = async (event: CalendarEvent) => {
+    await storage.saveCalendarEvent(event);
+    await refreshData();
+  };
+
+  const handleDeleteCalendarEvent = async (eventId: string) => {
+    await storage.deleteCalendarEvent(eventId);
+    await refreshData();
+  };
+
+  const handleSaveLearningGoal = async (goal: LearningGoal) => {
+    await storage.saveLearningGoal(goal);
+    await refreshData();
+  };
+
+  const handleDeleteLearningGoal = async (goalId: string) => {
+    await storage.deleteLearningGoal(goalId);
+    await refreshData();
+  };
+
+  const handleSavePortfolioProject = async (project: PortfolioProject) => {
+    await storage.savePortfolioProject(project);
+    await refreshData();
+  };
+
+  const handleDeletePortfolioProject = async (projectId: string) => {
+    await storage.deletePortfolioProject(projectId);
     await refreshData();
   };
 
   const activeClass = classes.find((c) => c.id === activeClassId);
 
-  // Filter classes
+  // Filter classes in catalog view
   const uniqueSubjects = ['All', ...Array.from(new Set(classes.map((c) => c.subject)))];
   const filteredClasses = classes.filter((c) => {
     const matchesSearch =
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      c.title.toLowerCase().includes(classCatalogSearch.toLowerCase()) ||
+      c.description.toLowerCase().includes(classCatalogSearch.toLowerCase()) ||
+      c.tags.some((t) => t.toLowerCase().includes(classCatalogSearch.toLowerCase()));
     const matchesSubject = selectedSubjectFilter === 'All' || c.subject === selectedSubjectFilter;
     return matchesSearch && matchesSubject;
   });
 
+  const dueFlashcards = flashcards.filter((c) => c.schedule.nextReviewAt <= Date.now());
+
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900">
-      {/* Opening loading screen (shown only during initial app initialization) */}
+    <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900 selection:bg-amber-200">
       {isInitialLoading && <LoadingScreen />}
 
-      {/* Top Main Navigation */}
-      <header className="sticky top-0 z-40 bg-white border-b border-stone-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      {/* Primary Top Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-stone-200 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          {/* Logo & Platform Title */}
           <div
             onClick={() => {
               setActiveClassId(null);
-              setCurrentView('classes');
+              setActiveTab('dashboard');
             }}
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-3 cursor-pointer group shrink-0"
           >
             <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs group-hover:bg-amber-700 transition">
               <GraduationCap size={22} />
@@ -313,45 +489,199 @@ export const App: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick Search trigger & Offline Status */}
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsSearchModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-white text-stone-500 hover:text-stone-800 text-xs font-medium transition cursor-pointer"
+            >
+              <Search size={14} />
+              <span className="hidden sm:inline">Search workspace...</span>
+              <kbd className="hidden sm:inline text-[10px] font-mono bg-stone-200/80 px-1.5 py-0.5 rounded text-stone-600">
+                /
+              </kbd>
+            </button>
+
             <OfflineStatusIndicator />
+          </div>
+        </div>
+
+        {/* Global Navigation Tabs Bar */}
+        <div className="border-t border-stone-100 bg-stone-50/70 overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 py-1 text-xs">
             <button
               type="button"
               onClick={() => {
                 setActiveClassId(null);
-                setCurrentView('classes');
+                setActiveTab('dashboard');
               }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                currentView === 'classes' && !activeClassId
-                  ? 'bg-stone-900 text-white'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'dashboard' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
               }`}
             >
-              Classes
+              <LayoutDashboard size={14} />
+              <span>Dashboard</span>
             </button>
+
             <button
               type="button"
               onClick={() => {
                 setActiveClassId(null);
-                setCurrentView('settings');
+                setActiveTab('classes');
               }}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                currentView === 'settings'
-                  ? 'bg-stone-900 text-white'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                (activeTab === 'classes' || activeClassId)
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <BookOpen size={14} />
+              <span>My Classes ({classes.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('paths');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'paths' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <Compass size={14} />
+              <span>Learning Paths</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('notebook');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'notebook' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <FileText size={14} />
+              <span>Notebook ({notes.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('flashcards');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'flashcards' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <Brain size={14} />
+              <span>Flashcards</span>
+              {dueFlashcards.length > 0 && (
+                <span className="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-full font-bold">
+                  {dueFlashcards.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('skills');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'skills' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <Layers size={14} />
+              <span>Skills Matrix</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('calendar');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'calendar' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <Calendar size={14} />
+              <span>Calendar & Goals</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('portfolio');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'portfolio' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <FolderGit2 size={14} />
+              <span>Portfolio</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('analytics');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'analytics' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+              }`}
+            >
+              <TrendingUp size={14} />
+              <span>Analytics</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveClassId(null);
+                setActiveTab('settings');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeTab === 'settings' && !activeClassId
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
               }`}
             >
               <HardDrive size={14} />
-              <span className="hidden sm:inline">Storage & Backups</span>
+              <span>Storage & Backup</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <div className="flex-1">
-        {/* VIEW 1: Classroom Active View */}
+      {/* Main Container Views */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8">
         {activeClass ? (
+          /* Active Classroom View */
           <Classroom
             learningClass={activeClass}
             chapters={chapters}
@@ -376,22 +706,105 @@ export const App: React.FC = () => {
             onUploadResource={handleUploadResource}
             onDeleteResource={handleDeleteResource}
           />
-        ) : currentView === 'settings' ? (
-          /* VIEW 2: Storage & Backup Settings */
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        ) : activeTab === 'dashboard' ? (
+          /* Module 1: Dashboard */
+          <PersonalDashboard
+            classes={classes}
+            lessons={lessons}
+            analytics={analytics}
+            dueCards={dueFlashcards}
+            skills={skills}
+            upcomingEvents={calendarEvents}
+            onOpenClass={(cId, lId) => {
+              setActiveClassId(cId);
+              setActiveLessonId(lId);
+            }}
+            onNavigateTab={(tab) => setActiveTab(tab as MainNavigationTab)}
+          />
+        ) : activeTab === 'paths' ? (
+          /* Module 9: Learning Paths */
+          <LearningPathsView
+            paths={learningPaths}
+            classes={classes}
+            lessons={lessons}
+            onSavePath={handleSaveLearningPath}
+            onDeletePath={handleDeleteLearningPath}
+            onOpenClass={(cId) => setActiveClassId(cId)}
+          />
+        ) : activeTab === 'notebook' ? (
+          /* Module 3: Personal Notes */
+          <NotebookView
+            notes={notes}
+            classes={classes}
+            onSaveNote={handleSaveNote}
+            onDeleteNote={handleDeleteNote}
+            onNavigateToLesson={(cId, lId) => {
+              setActiveClassId(cId);
+              setActiveLessonId(lId);
+            }}
+          />
+        ) : activeTab === 'flashcards' ? (
+          /* Module 4: Flashcards & Spaced Repetition */
+          <FlashcardsView
+            decks={flashcardDecks}
+            cards={flashcards}
+            classes={classes}
+            onSaveDeck={handleSaveDeck}
+            onDeleteDeck={handleDeleteDeck}
+            onSaveCard={handleSaveCard}
+            onDeleteCard={handleDeleteCard}
+          />
+        ) : activeTab === 'skills' ? (
+          /* Module 7: Skills & Competency Matrix */
+          <SkillsTrackerView
+            skills={skills}
+            classes={classes}
+            submissions={submissions}
+            onSaveSkill={handleSaveSkill}
+            onDeleteSkill={handleDeleteSkill}
+          />
+        ) : activeTab === 'calendar' ? (
+          /* Module 10: Calendar & Goals */
+          <CalendarGoalsView
+            events={calendarEvents}
+            goals={learningGoals}
+            classes={classes}
+            onSaveEvent={handleSaveCalendarEvent}
+            onDeleteEvent={handleDeleteCalendarEvent}
+            onSaveGoal={handleSaveLearningGoal}
+            onDeleteGoal={handleDeleteLearningGoal}
+          />
+        ) : activeTab === 'portfolio' ? (
+          /* Module 13: Personal Portfolio */
+          <PortfolioView
+            projects={portfolioProjects}
+            classes={classes}
+            resources={resources}
+            onSaveProject={handleSavePortfolioProject}
+            onDeleteProject={handleDeletePortfolioProject}
+          />
+        ) : activeTab === 'analytics' ? (
+          /* Module 14: Study Analytics */
+          <AnalyticsView
+            analytics={analytics}
+            achievements={achievements}
+            skills={skills}
+          />
+        ) : activeTab === 'settings' ? (
+          /* Module 16: Backup & Storage */
+          <div className="max-w-7xl mx-auto">
             <BackupSettings onDataChanged={refreshData} />
           </div>
         ) : (
-          /* VIEW 3: Classes Catalog / Dashboard */
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-            {/* Header banner */}
+          /* Module 2: Course Catalog & Management */
+          <main className="max-w-7xl mx-auto space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-                  My Learning Classes
+                  Course Catalog & Curriculum Hub
                 </h1>
                 <p className="text-xs text-stone-500 mt-1">
-                  Organize subjects, structure syllabuses, read notes, and test your retention.
+                  Structured learning syllabuses, interactive quizzes, exercises, and binary attachments.
                 </p>
               </div>
 
@@ -429,8 +842,8 @@ export const App: React.FC = () => {
                 />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={classCatalogSearch}
+                  onChange={(e) => setClassCatalogSearch(e.target.value)}
                   placeholder="Search classes, subjects, or tags..."
                   className="w-full pl-9 pr-4 py-2 text-xs bg-stone-50 rounded-xl border border-stone-200 focus:outline-none focus:border-amber-500 focus:bg-white transition"
                 />
@@ -610,6 +1023,35 @@ export const App: React.FC = () => {
           onClose={() => setIsPackImportModalOpen(false)}
         />
       )}
+
+      {/* Global Search Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onSelectResult={(res) => {
+          if (res.type === 'class' && res.classId) {
+            setActiveClassId(res.classId);
+          } else if (res.type === 'lesson' && res.classId) {
+            setActiveClassId(res.classId);
+            setActiveLessonId(res.lessonId);
+          } else if (res.type === 'note') {
+            setActiveClassId(null);
+            setActiveTab('notebook');
+          } else if (res.type === 'flashcard') {
+            setActiveClassId(null);
+            setActiveTab('flashcards');
+          } else if (res.type === 'skill') {
+            setActiveClassId(null);
+            setActiveTab('skills');
+          } else if (res.type === 'path') {
+            setActiveClassId(null);
+            setActiveTab('paths');
+          } else if (res.type === 'portfolio') {
+            setActiveClassId(null);
+            setActiveTab('portfolio');
+          }
+        }}
+      />
     </div>
   );
 };
